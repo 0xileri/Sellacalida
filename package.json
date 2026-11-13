@@ -11,7 +11,9 @@
     "compile": "tsx scripts/compile-contracts.mts",
     "test": "vitest run",
     "test:watch": "vitest",
-    "chipnet": "tsx scripts/chipnet/run.mts"
+    "chipnet": "tsx scripts/chipnet/run.mts",
+    "reproduce": "tsx scripts/reproduce.mts",
+    "agent:try": "tsx scripts/agent-try.mts"
   },
   "dependencies": {
     "@bitauth/libauth": "^3.1.0-next.8",
