@@ -4,6 +4,12 @@
 /** Minimum `value` (sats) on every contract-constrained output. >= token dust, see tests/dust.test.ts. */
 export const MIN_OUTPUT_SATS = 1000n;
 
+/**
+ * Cap on the miner fee an escrow's own sats may pay on an unsigned settle / timeout. With a fee
+ * payer (extra output), the winner / refunds must keep every escrow sat. See SellacalidaEscrow.cash.
+ */
+export const MAX_FEE_SATS = 2000n;
+
 /** expiryHeight must be strictly below this so nLocktime is read as a block height. */
 export const MAX_HEIGHT = 500_000_000;
 

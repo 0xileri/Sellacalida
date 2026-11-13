@@ -262,8 +262,11 @@ export function buildTimeout(i: TimeoutInput): TransactionBuilder {
       const b = new TransactionBuilder({ provider: i.provider, ...i.builderOptions });
       b.addInput(i.escrowUtxo, i.escrowContract.unlock.timeout(feeLock));
       if (i.bchFeeInput) b.addInput(i.bchFeeInput.utxo, i.bchFeeInput.unlocker);
-      const spare = i.feeLockingBytecode ? 0n : inSats - 2n * MIN_OUTPUT_SATS - fee;
-      // without a fee output, leftover BCH is split onto the agent refund output
+      // the agent refund carries the escrow's spare sats: all of them when a fee payer joins,
+      // otherwise whatever is left after the miner fee (the contract caps that fee)
+      const spare = i.feeLockingBytecode
+        ? i.escrowUtxo.satoshis - 2n * MIN_OUTPUT_SATS
+        : inSats - 2n * MIN_OUTPUT_SATS - fee;
       b.addOutput({
         to: p2pkhLockingBytecode(a.agentPkh),
         amount: MIN_OUTPUT_SATS + (spare > 0n ? spare : 0n),
@@ -275,7 +278,8 @@ export function buildTimeout(i: TimeoutInput): TransactionBuilder {
         token: { category: i.tokenCategory, amount: a.feeAmount },
       });
       if (i.feeLockingBytecode) {
-        b.addOutput({ to: i.feeLockingBytecode, amount: inSats - 2n * MIN_OUTPUT_SATS - fee });
+        const refunds = i.escrowUtxo.satoshis > 2n * MIN_OUTPUT_SATS ? i.escrowUtxo.satoshis : 2n * MIN_OUTPUT_SATS;
+        b.addOutput({ to: i.feeLockingBytecode, amount: inSats - refunds - fee });
       }
       b.setLocktime(i.locktime);
       i.tamper?.(b);

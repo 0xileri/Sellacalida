@@ -44,7 +44,7 @@ tests/                     vitest suites (mocknet)
 
 ```bash
 npm install
-npm test                 # 174 tests, MockNetworkProvider with vmTarget BCH_2026_05
+npm test                 # 183 tests, MockNetworkProvider with vmTarget BCH_2026_05
 npm run compile          # recompile contracts/*.cash (tests fail if artifacts are stale)
 npm run dev              # http://localhost:3000, wallet spike at /connect
 npm run chipnet -- all --network mocknet   # dry-run the chipnet flows in memory
@@ -59,6 +59,7 @@ Chipnet and wallet instructions: [`SPIKE.md`](./SPIKE.md).
 - The 156-byte attestation: 22-byte prefix with the trailing colon, every offset, wrong prefix / length / shifted field / flipped txid / foreign key all rejected.
 - Every row of the per-function input and output tables in spec section 3, with negative tests that assert the exact `require` that fails.
 - Deadline bound: far-future expiry fails with a current locktime, and raising the locktime makes the accept non-final.
+- Settle and timeout are unsigned, so a mempool copier could rebuild them. The escrow pins its BCH: with a fee payer, the winner (or the two refunds) keep every escrow sat; without one, at most `MAX_FEE_SATS` goes to miners. Copier attempts are tested.
 - NORESPONSE only after the answer deadline with a zero answer hash; timeout only at expiry with a non-final sequence; settle and timeout cannot both happen.
 - `MIN_OUTPUT_SATS` covers token dust for P2PKH and P2SH32 outputs; contract constants match TypeScript; artifacts are fresh.
 - `lib/agent` cannot import checkers, the verifier, or attestation code.

@@ -75,189 +75,205 @@ export default {
       ]
     }
   ],
-  "bytecode": "OP_11 OP_PICK OP_0 OP_NUMEQUAL OP_IF OP_3 OP_ROLL OP_4 OP_ROLL OP_ADD OP_INPUTINDEX OP_0 OP_NUMEQUALVERIFY OP_TXINPUTCOUNT OP_1 OP_NUMEQUAL OP_TXINPUTCOUNT OP_2 OP_NUMEQUAL OP_BOOLOR OP_VERIFY OP_0 OP_UTXOTOKENCATEGORY OP_5 OP_PICK OP_EQUALVERIFY OP_0 OP_UTXOTOKENAMOUNT OP_OVER OP_NUMEQUALVERIFY OP_TXINPUTCOUNT OP_2 OP_NUMEQUAL OP_IF OP_1 OP_UTXOTOKENCATEGORY OP_0 OP_EQUALVERIFY OP_ENDIF OP_12 OP_PICK OP_SIZE OP_NIP 9c00 OP_NUMEQUALVERIFY OP_12 OP_PICK 16 OP_SPLIT OP_SWAP 53454c4c4143414c4944412d4154544553542d76313a OP_EQUALVERIFY OP_1 OP_SPLIT OP_SWAP OP_7 OP_ROLL OP_EQUALVERIFY 20 OP_SPLIT OP_SWAP OP_7 OP_ROLL OP_EQUALVERIFY 20 OP_SPLIT OP_SWAP OP_INPUTINDEX OP_OUTPOINTTXHASH OP_EQUALVERIFY OP_4 OP_SPLIT OP_SWAP OP_INPUTINDEX OP_OUTPOINTINDEX OP_4 OP_NUM2BIN OP_EQUALVERIFY 20 OP_SPLIT OP_SWAP OP_7 OP_ROLL OP_EQUALVERIFY OP_1 OP_SPLIT OP_SIZE 20 OP_NUMEQUALVERIFY OP_4 OP_ROLL OP_2 OP_PICK OP_1 OP_EQUAL OP_IF OP_4 OP_PICK OP_NIP OP_ELSE OP_2 OP_PICK OP_2 OP_EQUAL OP_IF OP_OVER OP_SIZE OP_NIP 20 OP_NUMEQUALVERIFY OP_ELSE OP_2 OP_PICK OP_3 OP_EQUALVERIFY OP_OVER 0000000000000000000000000000000000000000000000000000000000000000 OP_EQUALVERIFY OP_7 OP_PICK OP_9 OP_PICK OP_SUB OP_CHECKLOCKTIMEVERIFY OP_DROP OP_ENDIF OP_ENDIF OP_10 OP_ROLL OP_11 OP_ROLL OP_7 OP_ROLL OP_CHECKDATASIGVERIFY OP_TXOUTPUTCOUNT OP_1 OP_NUMEQUAL OP_TXOUTPUTCOUNT OP_2 OP_NUMEQUAL OP_BOOLOR OP_VERIFY OP_0 OP_OUTPUTBYTECODE 76a914 OP_ROT OP_CAT 88ac OP_CAT OP_EQUALVERIFY OP_0 OP_OUTPUTTOKENCATEGORY OP_5 OP_ROLL OP_EQUALVERIFY OP_0 OP_OUTPUTTOKENAMOUNT OP_3 OP_ROLL OP_NUMEQUALVERIFY OP_0 OP_OUTPUTVALUE e803 OP_GREATERTHANOREQUAL OP_VERIFY OP_TXOUTPUTCOUNT OP_2 OP_NUMEQUAL OP_IF OP_1 OP_OUTPUTBYTECODE OP_7 OP_PICK OP_EQUALVERIFY OP_1 OP_OUTPUTTOKENCATEGORY OP_0 OP_EQUALVERIFY OP_1 OP_OUTPUTVALUE e803 OP_GREATERTHANOREQUAL OP_VERIFY OP_ENDIF OP_2DROP OP_2DROP OP_2DROP OP_DROP OP_1 OP_ELSE OP_11 OP_ROLL OP_1 OP_NUMEQUALVERIFY OP_9 OP_ROLL OP_CHECKLOCKTIMEVERIFY OP_DROP OP_INPUTINDEX OP_0 OP_NUMEQUALVERIFY OP_TXINPUTCOUNT OP_1 OP_NUMEQUAL OP_TXINPUTCOUNT OP_2 OP_NUMEQUAL OP_BOOLOR OP_VERIFY OP_0 OP_UTXOTOKENCATEGORY OP_6 OP_PICK OP_EQUALVERIFY OP_0 OP_UTXOTOKENAMOUNT OP_4 OP_PICK OP_6 OP_PICK OP_ADD OP_NUMEQUALVERIFY OP_TXINPUTCOUNT OP_2 OP_NUMEQUAL OP_IF OP_1 OP_UTXOTOKENCATEGORY OP_0 OP_EQUALVERIFY OP_ENDIF OP_TXOUTPUTCOUNT OP_2 OP_NUMEQUAL OP_TXOUTPUTCOUNT OP_3 OP_NUMEQUAL OP_BOOLOR OP_VERIFY OP_0 OP_OUTPUTBYTECODE 76a914 OP_ROT OP_CAT 88ac OP_CAT OP_EQUALVERIFY OP_0 OP_OUTPUTTOKENCATEGORY OP_5 OP_PICK OP_EQUALVERIFY OP_0 OP_OUTPUTTOKENAMOUNT OP_3 OP_ROLL OP_NUMEQUALVERIFY OP_0 OP_OUTPUTVALUE e803 OP_GREATERTHANOREQUAL OP_VERIFY OP_1 OP_OUTPUTBYTECODE 76a914 OP_ROT OP_CAT 88ac OP_CAT OP_EQUALVERIFY OP_1 OP_OUTPUTTOKENCATEGORY OP_3 OP_ROLL OP_EQUALVERIFY OP_1 OP_OUTPUTTOKENAMOUNT OP_ROT OP_NUMEQUALVERIFY OP_1 OP_OUTPUTVALUE e803 OP_GREATERTHANOREQUAL OP_VERIFY OP_TXOUTPUTCOUNT OP_3 OP_NUMEQUAL OP_IF OP_2 OP_OUTPUTBYTECODE OP_6 OP_PICK OP_EQUALVERIFY OP_2 OP_OUTPUTTOKENCATEGORY OP_0 OP_EQUALVERIFY OP_2 OP_OUTPUTVALUE e803 OP_GREATERTHANOREQUAL OP_VERIFY OP_ENDIF OP_2DROP OP_2DROP OP_2DROP OP_1 OP_ENDIF",
-  "source": "pragma cashscript ^0.14.0;\n\n// SellacalidaEscrow\n// Holds bondAmount + feeAmount of one fungible CashToken category until either\n//   settle():  a verifier-signed 156-byte attestation (PASS / FAIL / NORESPONSE), or\n//   timeout(): the block-height expiry, which refunds both sides.\n//\n// Spec: SELLACALIDA_SPEC.md section 3.2 and section 4.\n// Every constant here is mirrored in lib/constants.ts and locked by tests.\n\nint constant MIN_OUTPUT_SATS = 1000;\n\n// Verdict bytes\n// 0x01 PASS        -> agent receives bond + fee\n// 0x02 FAIL        -> challenger receives bond + fee\n// 0x03 NORESPONSE  -> challenger receives bond + fee, only after the answer deadline\n\ncontract SellacalidaEscrow(\n    bytes20 agentPkh,\n    bytes20 challengerPkh,\n    pubkey verifierPk,\n    int bondAmount,\n    int feeAmount,\n    // unreversed (VM order) 32-byte category, no capability suffix\n    bytes32 tokenCategory,\n    // 1 byte: 0x00 mainnet, 0x01 chipnet, 0x02 mocknet\n    bytes networkId,\n    bytes32 challengeId,\n    bytes32 specHash,\n    int expiryHeight,\n    int verifierGraceBlocks\n) {\n    // Input table:\n    //   0: this escrow UTXO, category == tokenCategory (32 bytes), amount == bond + fee\n    //   1 (optional): settler BCH fee input, no tokens\n    // Output table (1 or 2 outputs):\n    //   0: P2PKH(winner), category == tokenCategory, amount == bond + fee, value >= MIN_OUTPUT_SATS\n    //   1 (optional): feeLockingBytecode, no tokens, value >= MIN_OUTPUT_SATS\n    function settle(datasig verifierSig, bytes message, bytes feeLockingBytecode) {\n        int totalAmount = bondAmount + feeAmount;\n\n        // ---- inputs ----\n        require(this.activeInputIndex == 0);\n        require(tx.inputs.length == 1 || tx.inputs.length == 2);\n        // equality with a bytes32 also enforces length 32 (fungible-only, no NFT capability byte)\n        require(tx.inputs[0].tokenCategory == tokenCategory);\n        require(tx.inputs[0].tokenAmount == totalAmount);\n        if (tx.inputs.length == 2) {\n            require(tx.inputs[1].tokenCategory == 0x);\n        }\n\n        // ---- attestation parse (layout: lib/attestation.ts ATTEST_OFFSETS) ----\n        require(message.length == 156);\n        bytes prefix, bytes r1 = message.split(22);\n        require(prefix == bytes('SELLACALIDA-ATTEST-v1:'));\n        bytes networkIdB, bytes r2 = r1.split(1);\n        require(networkIdB == networkId);\n        bytes challengeIdB, bytes r3 = r2.split(32);\n        require(challengeIdB == challengeId);\n        bytes outpointTxidB, bytes r4 = r3.split(32);\n        require(outpointTxidB == tx.inputs[this.activeInputIndex].outpointTransactionHash);\n        bytes outpointIndexB, bytes r5 = r4.split(4);\n        // 4-byte little-endian outpoint index (OP_NUM2BIN), locked by tests against the TS serializer\n        require(outpointIndexB == toPaddedBytes(tx.inputs[this.activeInputIndex].outpointIndex, 4));\n        bytes specHashB, bytes r6 = r5.split(32);\n        require(specHashB == specHash);\n        bytes verdictB, bytes answerHashB = r6.split(1);\n        require(answerHashB.length == 32);\n\n        bytes20 winnerPkh = challengerPkh;\n        if (verdictB == 0x01) {\n            // PASS\n            winnerPkh = agentPkh;\n        } else if (verdictB == 0x02) {\n            // FAIL: challenger wins, no extra height lock\n            require(answerHashB.length == 32);\n        } else {\n            // NORESPONSE: only after the answer deadline, and only with no committed answer\n            require(verdictB == 0x03);\n            require(answerHashB == 0x0000000000000000000000000000000000000000000000000000000000000000);\n            require(tx.time >= expiryHeight - verifierGraceBlocks);\n        }\n\n        // checkDataSig SHA-256s the raw message itself\n        require(checkDataSig(verifierSig, message, verifierPk));\n\n        // ---- outputs ----\n        require(tx.outputs.length == 1 || tx.outputs.length == 2);\n        require(tx.outputs[0].lockingBytecode == new LockingBytecodeP2PKH(winnerPkh));\n        require(tx.outputs[0].tokenCategory == tokenCategory);\n        require(tx.outputs[0].tokenAmount == totalAmount);\n        require(tx.outputs[0].value >= MIN_OUTPUT_SATS);\n        if (tx.outputs.length == 2) {\n            require(tx.outputs[1].lockingBytecode == feeLockingBytecode);\n            require(tx.outputs[1].tokenCategory == 0x);\n            require(tx.outputs[1].value >= MIN_OUTPUT_SATS);\n        }\n    }\n\n    // Verifier-unavailable path. Anyone may broadcast once tx.time (nLocktime) >= expiryHeight.\n    // Input table: same as settle.\n    // Output table (2 or 3 outputs):\n    //   0: P2PKH(agentPkh),      category == tokenCategory, amount == bondAmount, value >= MIN_OUTPUT_SATS\n    //   1: P2PKH(challengerPkh), category == tokenCategory, amount == feeAmount,  value >= MIN_OUTPUT_SATS\n    //   2 (optional): feeLockingBytecode, no tokens, value >= MIN_OUTPUT_SATS\n    function timeout(bytes feeLockingBytecode) {\n        require(tx.time >= expiryHeight);\n\n        // ---- inputs ----\n        require(this.activeInputIndex == 0);\n        require(tx.inputs.length == 1 || tx.inputs.length == 2);\n        require(tx.inputs[0].tokenCategory == tokenCategory);\n        require(tx.inputs[0].tokenAmount == bondAmount + feeAmount);\n        if (tx.inputs.length == 2) {\n            require(tx.inputs[1].tokenCategory == 0x);\n        }\n\n        // ---- outputs ----\n        require(tx.outputs.length == 2 || tx.outputs.length == 3);\n        require(tx.outputs[0].lockingBytecode == new LockingBytecodeP2PKH(agentPkh));\n        require(tx.outputs[0].tokenCategory == tokenCategory);\n        require(tx.outputs[0].tokenAmount == bondAmount);\n        require(tx.outputs[0].value >= MIN_OUTPUT_SATS);\n        require(tx.outputs[1].lockingBytecode == new LockingBytecodeP2PKH(challengerPkh));\n        require(tx.outputs[1].tokenCategory == tokenCategory);\n        require(tx.outputs[1].tokenAmount == feeAmount);\n        require(tx.outputs[1].value >= MIN_OUTPUT_SATS);\n        if (tx.outputs.length == 3) {\n            require(tx.outputs[2].lockingBytecode == feeLockingBytecode);\n            require(tx.outputs[2].tokenCategory == 0x);\n            require(tx.outputs[2].value >= MIN_OUTPUT_SATS);\n        }\n    }\n}\n",
-  "fingerprint": "a92ba6c2d79b06a3f45184d1f5ea7a9fff45149262174452502f1357ef439e70",
+  "bytecode": "OP_11 OP_PICK OP_0 OP_NUMEQUAL OP_IF OP_3 OP_ROLL OP_4 OP_ROLL OP_ADD OP_INPUTINDEX OP_0 OP_NUMEQUALVERIFY OP_TXINPUTCOUNT OP_1 OP_NUMEQUAL OP_TXINPUTCOUNT OP_2 OP_NUMEQUAL OP_BOOLOR OP_VERIFY OP_0 OP_UTXOTOKENCATEGORY OP_5 OP_PICK OP_EQUALVERIFY OP_0 OP_UTXOTOKENAMOUNT OP_OVER OP_NUMEQUALVERIFY OP_TXINPUTCOUNT OP_2 OP_NUMEQUAL OP_IF OP_1 OP_UTXOTOKENCATEGORY OP_0 OP_EQUALVERIFY OP_ENDIF OP_12 OP_PICK OP_SIZE OP_NIP 9c00 OP_NUMEQUALVERIFY OP_12 OP_PICK 16 OP_SPLIT OP_SWAP 53454c4c4143414c4944412d4154544553542d76313a OP_EQUALVERIFY OP_1 OP_SPLIT OP_SWAP OP_7 OP_ROLL OP_EQUALVERIFY 20 OP_SPLIT OP_SWAP OP_7 OP_ROLL OP_EQUALVERIFY 20 OP_SPLIT OP_SWAP OP_INPUTINDEX OP_OUTPOINTTXHASH OP_EQUALVERIFY OP_4 OP_SPLIT OP_SWAP OP_INPUTINDEX OP_OUTPOINTINDEX OP_4 OP_NUM2BIN OP_EQUALVERIFY 20 OP_SPLIT OP_SWAP OP_7 OP_ROLL OP_EQUALVERIFY OP_1 OP_SPLIT OP_SIZE 20 OP_NUMEQUALVERIFY OP_4 OP_ROLL OP_2 OP_PICK OP_1 OP_EQUAL OP_IF OP_4 OP_PICK OP_NIP OP_ELSE OP_2 OP_PICK OP_2 OP_EQUAL OP_IF OP_OVER OP_SIZE OP_NIP 20 OP_NUMEQUALVERIFY OP_ELSE OP_2 OP_PICK OP_3 OP_EQUALVERIFY OP_OVER 0000000000000000000000000000000000000000000000000000000000000000 OP_EQUALVERIFY OP_7 OP_PICK OP_9 OP_PICK OP_SUB OP_CHECKLOCKTIMEVERIFY OP_DROP OP_ENDIF OP_ENDIF OP_10 OP_ROLL OP_11 OP_ROLL OP_7 OP_ROLL OP_CHECKDATASIGVERIFY OP_TXOUTPUTCOUNT OP_1 OP_NUMEQUAL OP_TXOUTPUTCOUNT OP_2 OP_NUMEQUAL OP_BOOLOR OP_VERIFY OP_0 OP_OUTPUTBYTECODE 76a914 OP_ROT OP_CAT 88ac OP_CAT OP_EQUALVERIFY OP_0 OP_OUTPUTTOKENCATEGORY OP_5 OP_ROLL OP_EQUALVERIFY OP_0 OP_OUTPUTTOKENAMOUNT OP_3 OP_ROLL OP_NUMEQUALVERIFY OP_0 OP_OUTPUTVALUE e803 OP_GREATERTHANOREQUAL OP_VERIFY OP_TXOUTPUTCOUNT OP_2 OP_NUMEQUAL OP_IF OP_1 OP_OUTPUTBYTECODE OP_7 OP_PICK OP_EQUALVERIFY OP_1 OP_OUTPUTTOKENCATEGORY OP_0 OP_EQUALVERIFY OP_1 OP_OUTPUTVALUE e803 OP_GREATERTHANOREQUAL OP_VERIFY OP_0 OP_OUTPUTVALUE OP_0 OP_UTXOVALUE OP_GREATERTHANOREQUAL OP_VERIFY OP_ELSE OP_0 OP_OUTPUTVALUE OP_0 OP_UTXOVALUE d007 OP_SUB OP_GREATERTHANOREQUAL OP_VERIFY OP_ENDIF OP_2DROP OP_2DROP OP_2DROP OP_DROP OP_1 OP_ELSE OP_11 OP_ROLL OP_1 OP_NUMEQUALVERIFY OP_9 OP_ROLL OP_CHECKLOCKTIMEVERIFY OP_DROP OP_INPUTINDEX OP_0 OP_NUMEQUALVERIFY OP_TXINPUTCOUNT OP_1 OP_NUMEQUAL OP_TXINPUTCOUNT OP_2 OP_NUMEQUAL OP_BOOLOR OP_VERIFY OP_0 OP_UTXOTOKENCATEGORY OP_6 OP_PICK OP_EQUALVERIFY OP_0 OP_UTXOTOKENAMOUNT OP_4 OP_PICK OP_6 OP_PICK OP_ADD OP_NUMEQUALVERIFY OP_TXINPUTCOUNT OP_2 OP_NUMEQUAL OP_IF OP_1 OP_UTXOTOKENCATEGORY OP_0 OP_EQUALVERIFY OP_ENDIF OP_TXOUTPUTCOUNT OP_2 OP_NUMEQUAL OP_TXOUTPUTCOUNT OP_3 OP_NUMEQUAL OP_BOOLOR OP_VERIFY OP_0 OP_OUTPUTBYTECODE 76a914 OP_ROT OP_CAT 88ac OP_CAT OP_EQUALVERIFY OP_0 OP_OUTPUTTOKENCATEGORY OP_5 OP_PICK OP_EQUALVERIFY OP_0 OP_OUTPUTTOKENAMOUNT OP_3 OP_ROLL OP_NUMEQUALVERIFY OP_0 OP_OUTPUTVALUE e803 OP_GREATERTHANOREQUAL OP_VERIFY OP_1 OP_OUTPUTBYTECODE 76a914 OP_ROT OP_CAT 88ac OP_CAT OP_EQUALVERIFY OP_1 OP_OUTPUTTOKENCATEGORY OP_3 OP_ROLL OP_EQUALVERIFY OP_1 OP_OUTPUTTOKENAMOUNT OP_ROT OP_NUMEQUALVERIFY OP_1 OP_OUTPUTVALUE e803 OP_GREATERTHANOREQUAL OP_VERIFY OP_0 OP_OUTPUTVALUE OP_1 OP_OUTPUTVALUE OP_ADD OP_TXOUTPUTCOUNT OP_3 OP_NUMEQUAL OP_IF OP_2 OP_OUTPUTBYTECODE OP_7 OP_PICK OP_EQUALVERIFY OP_2 OP_OUTPUTTOKENCATEGORY OP_0 OP_EQUALVERIFY OP_2 OP_OUTPUTVALUE e803 OP_GREATERTHANOREQUAL OP_VERIFY OP_DUP OP_0 OP_UTXOVALUE OP_GREATERTHANOREQUAL OP_VERIFY OP_ELSE OP_DUP OP_0 OP_UTXOVALUE d007 OP_SUB OP_GREATERTHANOREQUAL OP_VERIFY OP_ENDIF OP_2DROP OP_2DROP OP_2DROP OP_DROP OP_1 OP_ENDIF",
+  "source": "pragma cashscript ^0.14.0;\n\n// SellacalidaEscrow\n// Holds bondAmount + feeAmount of one fungible CashToken category until either\n//   settle():  a verifier-signed 156-byte attestation (PASS / FAIL / NORESPONSE), or\n//   timeout(): the block-height expiry, which refunds both sides.\n//\n// Spec: SELLACALIDA_SPEC.md section 3.2 and section 4.\n// Every constant here is mirrored in lib/constants.ts and locked by tests.\n\nint constant MIN_OUTPUT_SATS = 1000;\n// Cap on the miner fee the escrow's own sats may pay when no fee payer joins (about 2 sat/byte for a\n// ~0.93 kB settle). settle and timeout carry no signature, so anyone can rebroadcast them; these\n// value rules make sure a copier can never route the escrow's spare BCH to themselves.\nint constant MAX_FEE_SATS = 2000;\n\n// Verdict bytes\n// 0x01 PASS        -> agent receives bond + fee\n// 0x02 FAIL        -> challenger receives bond + fee\n// 0x03 NORESPONSE  -> challenger receives bond + fee, only after the answer deadline\n\ncontract SellacalidaEscrow(\n    bytes20 agentPkh,\n    bytes20 challengerPkh,\n    pubkey verifierPk,\n    int bondAmount,\n    int feeAmount,\n    // unreversed (VM order) 32-byte category, no capability suffix\n    bytes32 tokenCategory,\n    // 1 byte: 0x00 mainnet, 0x01 chipnet, 0x02 mocknet\n    bytes networkId,\n    bytes32 challengeId,\n    bytes32 specHash,\n    int expiryHeight,\n    int verifierGraceBlocks\n) {\n    // Input table:\n    //   0: this escrow UTXO, category == tokenCategory (32 bytes), amount == bond + fee\n    //   1 (optional): settler BCH fee input, no tokens\n    // Output table (1 or 2 outputs):\n    //   0: P2PKH(winner), category == tokenCategory, amount == bond + fee, value >= MIN_OUTPUT_SATS\n    //   1 (optional): feeLockingBytecode, no tokens, value >= MIN_OUTPUT_SATS\n    // Value rule:\n    //   1 output:  output 0 value >= escrow value - MAX_FEE_SATS (the escrow pays a capped miner fee)\n    //   2 outputs: output 0 value >= escrow value (the fee payer pays the miner fee from its own input)\n    function settle(datasig verifierSig, bytes message, bytes feeLockingBytecode) {\n        int totalAmount = bondAmount + feeAmount;\n\n        // ---- inputs ----\n        require(this.activeInputIndex == 0);\n        require(tx.inputs.length == 1 || tx.inputs.length == 2);\n        // equality with a bytes32 also enforces length 32 (fungible-only, no NFT capability byte)\n        require(tx.inputs[0].tokenCategory == tokenCategory);\n        require(tx.inputs[0].tokenAmount == totalAmount);\n        if (tx.inputs.length == 2) {\n            require(tx.inputs[1].tokenCategory == 0x);\n        }\n\n        // ---- attestation parse (layout: lib/attestation.ts ATTEST_OFFSETS) ----\n        require(message.length == 156);\n        bytes prefix, bytes r1 = message.split(22);\n        require(prefix == bytes('SELLACALIDA-ATTEST-v1:'));\n        bytes networkIdB, bytes r2 = r1.split(1);\n        require(networkIdB == networkId);\n        bytes challengeIdB, bytes r3 = r2.split(32);\n        require(challengeIdB == challengeId);\n        bytes outpointTxidB, bytes r4 = r3.split(32);\n        require(outpointTxidB == tx.inputs[this.activeInputIndex].outpointTransactionHash);\n        bytes outpointIndexB, bytes r5 = r4.split(4);\n        // 4-byte little-endian outpoint index (OP_NUM2BIN), locked by tests against the TS serializer\n        require(outpointIndexB == toPaddedBytes(tx.inputs[this.activeInputIndex].outpointIndex, 4));\n        bytes specHashB, bytes r6 = r5.split(32);\n        require(specHashB == specHash);\n        bytes verdictB, bytes answerHashB = r6.split(1);\n        require(answerHashB.length == 32);\n\n        bytes20 winnerPkh = challengerPkh;\n        if (verdictB == 0x01) {\n            // PASS\n            winnerPkh = agentPkh;\n        } else if (verdictB == 0x02) {\n            // FAIL: challenger wins, no extra height lock\n            require(answerHashB.length == 32);\n        } else {\n            // NORESPONSE: only after the answer deadline, and only with no committed answer\n            require(verdictB == 0x03);\n            require(answerHashB == 0x0000000000000000000000000000000000000000000000000000000000000000);\n            require(tx.time >= expiryHeight - verifierGraceBlocks);\n        }\n\n        // checkDataSig SHA-256s the raw message itself\n        require(checkDataSig(verifierSig, message, verifierPk));\n\n        // ---- outputs ----\n        require(tx.outputs.length == 1 || tx.outputs.length == 2);\n        require(tx.outputs[0].lockingBytecode == new LockingBytecodeP2PKH(winnerPkh));\n        require(tx.outputs[0].tokenCategory == tokenCategory);\n        require(tx.outputs[0].tokenAmount == totalAmount);\n        require(tx.outputs[0].value >= MIN_OUTPUT_SATS);\n        if (tx.outputs.length == 2) {\n            require(tx.outputs[1].lockingBytecode == feeLockingBytecode);\n            require(tx.outputs[1].tokenCategory == 0x);\n            require(tx.outputs[1].value >= MIN_OUTPUT_SATS);\n            require(tx.outputs[0].value >= tx.inputs[0].value);\n        } else {\n            require(tx.outputs[0].value >= tx.inputs[0].value - MAX_FEE_SATS);\n        }\n    }\n\n    // Verifier-unavailable path. Anyone may broadcast once tx.time (nLocktime) >= expiryHeight.\n    // Input table: same as settle.\n    // Output table (2 or 3 outputs):\n    //   0: P2PKH(agentPkh),      category == tokenCategory, amount == bondAmount, value >= MIN_OUTPUT_SATS\n    //   1: P2PKH(challengerPkh), category == tokenCategory, amount == feeAmount,  value >= MIN_OUTPUT_SATS\n    //   2 (optional): feeLockingBytecode, no tokens, value >= MIN_OUTPUT_SATS\n    // Value rule (outputs 0 + 1 together):\n    //   2 outputs: >= escrow value - MAX_FEE_SATS\n    //   3 outputs: >= escrow value (the broadcaster pays the miner fee from its own input)\n    function timeout(bytes feeLockingBytecode) {\n        require(tx.time >= expiryHeight);\n\n        // ---- inputs ----\n        require(this.activeInputIndex == 0);\n        require(tx.inputs.length == 1 || tx.inputs.length == 2);\n        require(tx.inputs[0].tokenCategory == tokenCategory);\n        require(tx.inputs[0].tokenAmount == bondAmount + feeAmount);\n        if (tx.inputs.length == 2) {\n            require(tx.inputs[1].tokenCategory == 0x);\n        }\n\n        // ---- outputs ----\n        require(tx.outputs.length == 2 || tx.outputs.length == 3);\n        require(tx.outputs[0].lockingBytecode == new LockingBytecodeP2PKH(agentPkh));\n        require(tx.outputs[0].tokenCategory == tokenCategory);\n        require(tx.outputs[0].tokenAmount == bondAmount);\n        require(tx.outputs[0].value >= MIN_OUTPUT_SATS);\n        require(tx.outputs[1].lockingBytecode == new LockingBytecodeP2PKH(challengerPkh));\n        require(tx.outputs[1].tokenCategory == tokenCategory);\n        require(tx.outputs[1].tokenAmount == feeAmount);\n        require(tx.outputs[1].value >= MIN_OUTPUT_SATS);\n        int refunded = tx.outputs[0].value + tx.outputs[1].value;\n        if (tx.outputs.length == 3) {\n            require(tx.outputs[2].lockingBytecode == feeLockingBytecode);\n            require(tx.outputs[2].tokenCategory == 0x);\n            require(tx.outputs[2].value >= MIN_OUTPUT_SATS);\n            require(refunded >= tx.inputs[0].value);\n        } else {\n            require(refunded >= tx.inputs[0].value - MAX_FEE_SATS);\n        }\n    }\n}\n",
+  "fingerprint": "8689bec8f016e80d467771da6d4607dbcb80ee1d57cac13e8d2358466c13a100",
   "debug": {
-    "bytecode": "5b79009c63537a547a93c0009dc3519cc3529c9b6900ce55798800d0789dc3529c6351ce0088685c798277029c009d5c7901167f7c1653454c4c4143414c4944412d4154544553542d76313a88517f7c577a8801207f7c577a8801207f7cc0c888547f7cc0c954808801207f7c577a88517f8201209d547a527951876354797767527952876378827701209d675279538878200000000000000000000000000000000000000000000000000000000000000000885779597994b17568685a7a5b7a577abbc4519cc4529c9b6900cd0376a9147b7e0288ac7e8800d1557a8800d3537a9d00cc02e803a269c4529c6351cd57798851d1008851cc02e803a269686d6d6d7551675b7a519d597ab175c0009dc3519cc3529c9b6900ce56798800d054795679939dc3529c6351ce008868c4529cc4539c9b6900cd0376a9147b7e0288ac7e8800d155798800d3537a9d00cc02e803a26951cd0376a9147b7e0288ac7e8851d1537a8851d37b9d51cc02e803a269c4539c6352cd56798852d1008852cc02e803a269686d6d6d5168",
-    "sourceMap": "39:4:98:5;;;;;40:26:40:36;;:39::48;;:26:::1;43:16:43:37:0;:41::42;:8::44:1;44:16:44:32:0;:36::37;:16:::1;:41::57:0;:61::62;:41:::1;:16;:8::64;46:26:46:27:0;:16::42:1;:46::59:0;;:8::61:1;47:26:47:27:0;:16::40:1;:44::55:0;:8::57:1;48:12:48:28:0;:32::33;:12:::1;:35:50:9:0;49:30:49:31;:20::46:1;:50::52:0;:12::54:1;48:35:50:9;53:16:53:23:0;;:::30:1;;:34::37:0;:8::39:1;54:33:54:40:0;;:47::49;:33::50:1;55:16:55:22:0;:32::56;:8::59:1;56:46:56:47:0;:37::48:1;57:16:57:26:0;:30::39;;:8::41:1;58:48:58:50:0;:39::51:1;59:16:59:28:0;:32::43;;:8::45:1;60:49:60:51:0;:40::52:1;61:16:61:29:0;:43::64;:33::89:1;:8::91;62:50:62:51:0;:41::52:1;64:16:64:30:0;:58::79;:48::94:1;:96::97:0;:34::98:1;:8::100;65:45:65:47:0;:36::48:1;66:16:66:25:0;:29::37;;:8::39:1;67:53:67:54:0;:44::55:1;68:16:68:34;:38::40:0;:8::42:1;70:28:70:41:0;;71:12:71:20;;:24::28;:12:::1;:30:74:9:0;73:24:73:32;;:12::33:1;74:15:82:9:0;:19:74:27;;:31::35;:19:::1;:37:77:9:0;76:20:76:31;:::38:1;;:42::44:0;:12::46:1;77:15:82:9:0;79:20:79:28;;:32::36;:12::38:1;80:20:80:31:0;:35::101;:12::103:1;81:31:81:43:0;;:46::65;;:31:::1;:12::67;;77:15:82:9;74;85:29:85:40:0;;:42::49;;:51::61;;:8::64:1;88:16:88:33:0;:37::38;:16:::1;:42::59:0;:63::64;:42:::1;:16;:8::66;89:27:89:28:0;:16::45:1;:49::84:0;:74::83;:49::84:1;;;:8::86;90:27:90:28:0;:16::43:1;:47::60:0;;:8::62:1;91:27:91:28:0;:16::41:1;:45::56:0;;:8::58:1;92:27:92:28:0;:16::35:1;:39::54;:16;:8::56;93:12:93:29:0;:33::34;:12:::1;:36:97:9:0;94:31:94:32;:20::49:1;:53::71:0;;:12::73:1;95:31:95:32:0;:20::47:1;:51::53:0;:12::55:1;96:31:96:32:0;:20::39:1;:43::58;:20;:12::60;93:36:97:9;39:82:98:5;;;;;:4;106::133::0;;;;107:27:107:39;;:8::41:1;;110:16:110:37:0;:41::42;:8::44:1;111:16:111:32:0;:36::37;:16:::1;:41::57:0;:61::62;:41:::1;:16;:8::64;112:26:112:27:0;:16::42:1;:46::59:0;;:8::61:1;113:26:113:27:0;:16::40:1;:44::54:0;;:57::66;;:44:::1;:8::68;114:12:114:28:0;:32::33;:12:::1;:35:116:9:0;115:30:115:31;:20::46:1;:50::52:0;:12::54:1;114:35:116:9;119:16:119:33:0;:37::38;:16:::1;:42::59:0;:63::64;:42:::1;:16;:8::66;120:27:120:28:0;:16::45:1;:49::83:0;:74::82;:49::83:1;;;:8::85;121:27:121:28:0;:16::43:1;:47::60:0;;:8::62:1;122:27:122:28:0;:16::41:1;:45::55:0;;:8::57:1;123:27:123:28:0;:16::35:1;:39::54;:16;:8::56;124:27:124:28:0;:16::45:1;:49::88:0;:74::87;:49::88:1;;;:8::90;125:27:125:28:0;:16::43:1;:47::60:0;;:8::62:1;126:27:126:28:0;:16::41:1;:45::54:0;:8::56:1;127:27:127:28:0;:16::35:1;:39::54;:16;:8::56;128:12:128:29:0;:33::34;:12:::1;:36:132:9:0;129:31:129:32;:20::49:1;:53::71:0;;:12::73:1;130:31:130:32:0;:20::47:1;:51::53:0;:12::55:1;131:31:131:32:0;:20::39:1;:43::58;:20;:12::60;128:36:132:9;106:47:133:5;;;;18:0:134:1",
+    "bytecode": "5b79009c63537a547a93c0009dc3519cc3529c9b6900ce55798800d0789dc3529c6351ce0088685c798277029c009d5c7901167f7c1653454c4c4143414c4944412d4154544553542d76313a88517f7c577a8801207f7c577a8801207f7cc0c888547f7cc0c954808801207f7c577a88517f8201209d547a527951876354797767527952876378827701209d675279538878200000000000000000000000000000000000000000000000000000000000000000885779597994b17568685a7a5b7a577abbc4519cc4529c9b6900cd0376a9147b7e0288ac7e8800d1557a8800d3537a9d00cc02e803a269c4529c6351cd57798851d1008851cc02e803a26900cc00c6a2696700cc00c602d00794a269686d6d6d7551675b7a519d597ab175c0009dc3519cc3529c9b6900ce56798800d054795679939dc3529c6351ce008868c4529cc4539c9b6900cd0376a9147b7e0288ac7e8800d155798800d3537a9d00cc02e803a26951cd0376a9147b7e0288ac7e8851d1537a8851d37b9d51cc02e803a26900cc51cc93c4539c6352cd57798852d1008852cc02e803a2697600c6a269677600c602d00794a269686d6d6d755168",
+    "sourceMap": "46:4:108:5;;;;;47:26:47:36;;:39::48;;:26:::1;50:16:50:37:0;:41::42;:8::44:1;51:16:51:32:0;:36::37;:16:::1;:41::57:0;:61::62;:41:::1;:16;:8::64;53:26:53:27:0;:16::42:1;:46::59:0;;:8::61:1;54:26:54:27:0;:16::40:1;:44::55:0;:8::57:1;55:12:55:28:0;:32::33;:12:::1;:35:57:9:0;56:30:56:31;:20::46:1;:50::52:0;:12::54:1;55:35:57:9;60:16:60:23:0;;:::30:1;;:34::37:0;:8::39:1;61:33:61:40:0;;:47::49;:33::50:1;62:16:62:22:0;:32::56;:8::59:1;63:46:63:47:0;:37::48:1;64:16:64:26:0;:30::39;;:8::41:1;65:48:65:50:0;:39::51:1;66:16:66:28:0;:32::43;;:8::45:1;67:49:67:51:0;:40::52:1;68:16:68:29:0;:43::64;:33::89:1;:8::91;69:50:69:51:0;:41::52:1;71:16:71:30:0;:58::79;:48::94:1;:96::97:0;:34::98:1;:8::100;72:45:72:47:0;:36::48:1;73:16:73:25:0;:29::37;;:8::39:1;74:53:74:54:0;:44::55:1;75:16:75:34;:38::40:0;:8::42:1;77:28:77:41:0;;78:12:78:20;;:24::28;:12:::1;:30:81:9:0;80:24:80:32;;:12::33:1;81:15:89:9:0;:19:81:27;;:31::35;:19:::1;:37:84:9:0;83:20:83:31;:::38:1;;:42::44:0;:12::46:1;84:15:89:9:0;86:20:86:28;;:32::36;:12::38:1;87:20:87:31:0;:35::101;:12::103:1;88:31:88:43:0;;:46::65;;:31:::1;:12::67;;84:15:89:9;81;92:29:92:40:0;;:42::49;;:51::61;;:8::64:1;95:16:95:33:0;:37::38;:16:::1;:42::59:0;:63::64;:42:::1;:16;:8::66;96:27:96:28:0;:16::45:1;:49::84:0;:74::83;:49::84:1;;;:8::86;97:27:97:28:0;:16::43:1;:47::60:0;;:8::62:1;98:27:98:28:0;:16::41:1;:45::56:0;;:8::58:1;99:27:99:28:0;:16::35:1;:39::54;:16;:8::56;100:12:100:29:0;:33::34;:12:::1;:36:105:9:0;101:31:101:32;:20::49:1;:53::71:0;;:12::73:1;102:31:102:32:0;:20::47:1;:51::53:0;:12::55:1;103:31:103:32:0;:20::39:1;:43::58;:20;:12::60;104:31:104:32:0;:20::39:1;:53::54:0;:43::61:1;:20;:12::63;105:15:107:9:0;106:31:106:32;:20::39:1;:53::54:0;:43::61:1;:64::76;:43;:20;:12::78;105:15:107:9;46:82:108:5;;;;;:4;119::150::0;;;;120:27:120:39;;:8::41:1;;123:16:123:37:0;:41::42;:8::44:1;124:16:124:32:0;:36::37;:16:::1;:41::57:0;:61::62;:41:::1;:16;:8::64;125:26:125:27:0;:16::42:1;:46::59:0;;:8::61:1;126:26:126:27:0;:16::40:1;:44::54:0;;:57::66;;:44:::1;:8::68;127:12:127:28:0;:32::33;:12:::1;:35:129:9:0;128:30:128:31;:20::46:1;:50::52:0;:12::54:1;127:35:129:9;132:16:132:33:0;:37::38;:16:::1;:42::59:0;:63::64;:42:::1;:16;:8::66;133:27:133:28:0;:16::45:1;:49::83:0;:74::82;:49::83:1;;;:8::85;134:27:134:28:0;:16::43:1;:47::60:0;;:8::62:1;135:27:135:28:0;:16::41:1;:45::55:0;;:8::57:1;136:27:136:28:0;:16::35:1;:39::54;:16;:8::56;137:27:137:28:0;:16::45:1;:49::88:0;:74::87;:49::88:1;;;:8::90;138:27:138:28:0;:16::43:1;:47::60:0;;:8::62:1;139:27:139:28:0;:16::41:1;:45::54:0;:8::56:1;140:27:140:28:0;:16::35:1;:39::54;:16;:8::56;141:34:141:35:0;:23::42:1;:56::57:0;:45::64:1;:23;142:12:142:29:0;:33::34;:12:::1;:36:147:9:0;143:31:143:32;:20::49:1;:53::71:0;;:12::73:1;144:31:144:32:0;:20::47:1;:51::53:0;:12::55:1;145:31:145:32:0;:20::39:1;:43::58;:20;:12::60;146:20:146:28:0;:42::43;:32::50:1;:20;:12::52;147:15:149:9:0;148:20:148:28;:42::43;:32::50:1;:53::65;:32;:20;:12::67;147:15:149:9;119:47:150:5;;;;;22:0:151:1",
     "logs": [],
     "requires": [
       {
         "ip": 23,
-        "line": 43
+        "line": 50
       },
       {
         "ip": 31,
-        "line": 44
+        "line": 51
       },
       {
         "ip": 36,
-        "line": 46
-      },
-      {
-        "ip": 40,
-        "line": 47
-      },
-      {
-        "ip": 48,
-        "line": 49
-      },
-      {
-        "ip": 55,
         "line": 53
       },
       {
+        "ip": 40,
+        "line": 54
+      },
+      {
+        "ip": 48,
+        "line": 56
+      },
+      {
+        "ip": 55,
+        "line": 60
+      },
+      {
         "ip": 62,
-        "line": 55
+        "line": 62
       },
       {
         "ip": 68,
-        "line": 57
-      },
-      {
-        "ip": 74,
-        "line": 59
-      },
-      {
-        "ip": 80,
-        "line": 61
-      },
-      {
-        "ip": 88,
         "line": 64
       },
       {
-        "ip": 94,
+        "ip": 74,
         "line": 66
       },
       {
-        "ip": 99,
+        "ip": 80,
         "line": 68
       },
       {
+        "ip": 88,
+        "line": 71
+      },
+      {
+        "ip": 94,
+        "line": 73
+      },
+      {
+        "ip": 99,
+        "line": 75
+      },
+      {
         "ip": 120,
-        "line": 76
+        "line": 83
       },
       {
         "ip": 125,
-        "line": 79
+        "line": 86
       },
       {
         "ip": 128,
-        "line": 80
+        "line": 87
       },
       {
         "ip": 134,
-        "line": 81
-      },
-      {
-        "ip": 144,
-        "line": 85
-      },
-      {
-        "ip": 152,
         "line": 88
       },
       {
-        "ip": 160,
-        "line": 89
-      },
-      {
-        "ip": 165,
-        "line": 90
-      },
-      {
-        "ip": 170,
-        "line": 91
-      },
-      {
-        "ip": 175,
+        "ip": 144,
         "line": 92
       },
       {
-        "ip": 184,
-        "line": 94
-      },
-      {
-        "ip": 188,
+        "ip": 152,
         "line": 95
       },
       {
-        "ip": 193,
+        "ip": 160,
         "line": 96
       },
       {
-        "ip": 207,
-        "line": 107
+        "ip": 165,
+        "line": 97
       },
       {
-        "ip": 211,
-        "line": 110
+        "ip": 170,
+        "line": 98
       },
       {
-        "ip": 219,
-        "line": 111
+        "ip": 175,
+        "line": 99
       },
       {
-        "ip": 224,
-        "line": 112
+        "ip": 184,
+        "line": 101
       },
       {
-        "ip": 232,
-        "line": 113
+        "ip": 188,
+        "line": 102
       },
       {
-        "ip": 240,
-        "line": 115
+        "ip": 193,
+        "line": 103
       },
       {
-        "ip": 249,
-        "line": 119
+        "ip": 199,
+        "line": 104
       },
       {
-        "ip": 257,
+        "ip": 208,
+        "line": 106
+      },
+      {
+        "ip": 222,
         "line": 120
       },
       {
-        "ip": 262,
-        "line": 121
-      },
-      {
-        "ip": 267,
-        "line": 122
-      },
-      {
-        "ip": 272,
+        "ip": 226,
         "line": 123
       },
       {
-        "ip": 280,
+        "ip": 234,
         "line": 124
       },
       {
-        "ip": 285,
+        "ip": 239,
         "line": 125
       },
       {
-        "ip": 289,
+        "ip": 247,
         "line": 126
       },
       {
-        "ip": 294,
-        "line": 127
+        "ip": 255,
+        "line": 128
       },
       {
-        "ip": 303,
-        "line": 129
+        "ip": 264,
+        "line": 132
       },
       {
-        "ip": 307,
-        "line": 130
+        "ip": 272,
+        "line": 133
       },
       {
-        "ip": 312,
-        "line": 131
+        "ip": 277,
+        "line": 134
+      },
+      {
+        "ip": 282,
+        "line": 135
+      },
+      {
+        "ip": 287,
+        "line": 136
+      },
+      {
+        "ip": 295,
+        "line": 137
+      },
+      {
+        "ip": 300,
+        "line": 138
+      },
+      {
+        "ip": 304,
+        "line": 139
+      },
+      {
+        "ip": 309,
+        "line": 140
+      },
+      {
+        "ip": 323,
+        "line": 143
+      },
+      {
+        "ip": 327,
+        "line": 144
+      },
+      {
+        "ip": 332,
+        "line": 145
+      },
+      {
+        "ip": 337,
+        "line": 146
+      },
+      {
+        "ip": 345,
+        "line": 148
       }
     ],
     "functions": [
@@ -269,9 +285,18 @@ export default {
         "sourceMap": "11:31:11:35",
         "logs": [],
         "requires": []
+      },
+      {
+        "name": "MAX_FEE_SATS",
+        "kind": "constant",
+        "inputs": [],
+        "bytecode": "02d007",
+        "sourceMap": "15:28:15:32",
+        "logs": [],
+        "requires": []
       }
     ],
-    "inlineRanges": "173:173:MIN_OUTPUT_SATS;191:191:MIN_OUTPUT_SATS;270:270:MIN_OUTPUT_SATS;292:292:MIN_OUTPUT_SATS;310:310:MIN_OUTPUT_SATS"
+    "inlineRanges": "173:173:MIN_OUTPUT_SATS;191:191:MIN_OUTPUT_SATS;205:205:MAX_FEE_SATS;285:285:MIN_OUTPUT_SATS;307:307:MIN_OUTPUT_SATS;330:330:MIN_OUTPUT_SATS;342:342:MAX_FEE_SATS"
   },
   "compiler": {
     "name": "cashc",
@@ -281,5 +306,5 @@ export default {
       "enforceLocktimeGuard": true
     }
   },
-  "updatedAt": "2026-11-13T12:59:43.033Z"
+  "updatedAt": "2026-11-13T14:42:49.753Z"
 } as const;
