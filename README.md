@@ -22,7 +22,7 @@ Milestone 1 (contracts + wallet spike) is in progress:
 - Chipnet runner and `/connect` wallet spike page: built and dry-run on mocknet; real chipnet and real-wallet runs are pending (see `SPIKE.md`).
 - Challenge templates, checkers, the verifier core (decide, sign, settle, timeout), the write-once answer store and reproducible evidence: built and tested on mocknet. Not running live anywhere yet.
 - Agent runner: calls a real LLM (default `anthropic/claude-sonnet-5.5`) through Orbio's OpenAI-compatible gateway (any compatible base URL works), parses the reply strictly, and commits it write-once with the model id that actually served it. For BCH templates it gets one tool, `get_transaction`, which returns outputs decoded from raw hex verified against the txid; every call is recorded in the commitment and the evidence. `npm run agent:try` asks it one challenge.
-- Still to come: API routes, the product UI, and a verifier loop pointed at chipnet.
+- App: pages `/`, `/arena`, `/challenge/[id]` and `/agent/[id]`, a JSON API, and an in-process verifier loop (started from `instrumentation.ts`). Tested end to end on mocknet with the live agent through the real UI; not yet run against chipnet or a real wallet.
 
 ## Layout
 
@@ -41,7 +41,11 @@ lib/templates/check/       server only: accept-time validation and the four chec
 lib/store/answers.ts       write-once answer commitments (model id, raw response hash, answer hash)
 lib/verifier/              server only: decide, sign, settle / timeout, evidence + reproduce, key loading
 lib/agent/                 LLM runner: Orbio / OpenAI-compatible client, strict parser, ask-then-commit
-app/connect/               wallet spike page
+lib/server/                config (network / token guards), JSON DB, service layer, HTTP helpers, verifier loop
+lib/wire.ts                JSON shapes shared by the API and the browser
+app/                       pages: / , /arena, /challenge/[id], /agent/[id]; /connect is the wallet spike
+app/api/                   route handlers (public + /api/admin/*)
+instrumentation.ts         starts the verifier loop once per Node server
 scripts/chipnet/           chipnet runner (keygen, genesis, every contract path)
 tests/                     vitest suites (mocknet)
 ```
@@ -50,7 +54,7 @@ tests/                     vitest suites (mocknet)
 
 ```bash
 npm install
-npm test                 # 339 tests, MockNetworkProvider with vmTarget BCH_2026_05
+npm test                 # 377 tests, MockNetworkProvider with vmTarget BCH_2026_05
 npm run compile          # recompile contracts/*.cash (tests fail if artifacts are stale)
 npm run dev              # http://localhost:3000, wallet spike at /connect
 npm run chipnet -- all --network mocknet   # dry-run the chipnet flows in memory
@@ -58,6 +62,33 @@ npm run agent:try        # ask the live agent one challenge (needs LLM_API_KEY, 
 ```
 
 Chipnet and wallet instructions: [`SPIKE.md`](./SPIKE.md).
+
+### Run the app
+
+The app is one long-running Node process (`next build && next start`): it holds the JSON store and runs the verifier loop, so do not deploy it as serverless functions. Settings live in `.env.local` (see `.env.example`).
+
+Local UI work without a wallet or chain access, on an in-memory mocknet:
+
+```bash
+NETWORK=mocknet LLM_API_KEY=<your Orbio key> npm run dev
+```
+
+```bash
+curl -X POST localhost:3000/api/admin/offers
+```
+
+Then open `/arena`. On mocknet the accept button plays the challenger with a throwaway key; on chipnet and mainnet it signs through WizardConnect (Paytaca or Selene).
+
+API:
+
+| Route | Use |
+| --- | --- |
+| `GET /api/config`, `/api/stats`, `/api/offers`, `/api/agents/[id]` | public state, polled by the pages |
+| `GET /api/challenges`, `/api/challenges/[id]`, `/api/challenges/[id]/evidence` | challenges and downloadable evidence |
+| `POST /api/challenges` | validate a spec and get the accept bundle (invalid params are rejected here) |
+| `POST /api/challenges/[id]/accepted` | report the broadcast accept; the server re-checks it from the raw tx |
+| `POST /api/admin/offers`, `/api/admin/offers/[id]/cancel`, `/api/admin/tick` | `Authorization: Bearer $ADMIN_TOKEN` |
+| `POST /api/admin/dev/challenge` | mocknet only: simulate a challenger |
 
 ## Challenge templates (v1)
 

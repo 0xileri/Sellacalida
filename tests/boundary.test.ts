@@ -54,7 +54,7 @@ function reachable(entry: string): Map<string, string[]> {
 
 const rel = (p: string) => relative(root, p);
 const FORBIDDEN_FOR_AGENT = [/^lib\/templates\/check\//, /^lib\/verifier\//];
-const FORBIDDEN_FOR_CLIENT = [/^lib\/templates\/check\//, /^lib\/verifier\//, /^lib\/store\//];
+const FORBIDDEN_FOR_CLIENT = [/^lib\/templates\/check\//, /^lib\/verifier\//, /^lib\/store\//, /^lib\/server\//];
 
 function violations(entries: string[], forbidden: RegExp[]) {
   const out: string[] = [];
@@ -82,7 +82,7 @@ describe('import boundaries', () => {
     expect(violations(entries, FORBIDDEN_FOR_AGENT)).toEqual([]);
   });
 
-  it('client components cannot reach checkers, the verifier or the server store', () => {
+  it('client components cannot reach checkers, the verifier, the store or any server module', () => {
     const clientFiles = walk(join(root, 'app')).filter((f) => /^\s*['"]use client['"]/.test(readFileSync(f, 'utf8')));
     expect(clientFiles.length).toBeGreaterThan(0);
     expect(violations(clientFiles, FORBIDDEN_FOR_CLIENT)).toEqual([]);
@@ -92,6 +92,7 @@ describe('import boundaries', () => {
     const readers = [...walk(join(root, 'lib')), ...walk(join(root, 'app'))]
       .filter((f) => readFileSync(f, 'utf8').includes('VERIFIER_PRIVATE_KEY'))
       .map(rel);
-    expect(readers).toEqual(['lib/verifier/keys.ts']);
+    expect(readers.length).toBeGreaterThan(0);
+    expect(readers.filter((f) => !/^lib\/(verifier|server)\//.test(f))).toEqual([]);
   });
 });

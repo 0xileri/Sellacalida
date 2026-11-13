@@ -2,14 +2,22 @@
 
 /* Sellacalida is dark-only for v1 (spec section 7: a dark, fast, obvious UI). */
 :root {
+  color-scheme: dark;
   --background: #0b0d10;
   --panel: #12161b;
+  --panel-2: #181d23;
   --foreground: #e8eaed;
   --muted: #8b949e;
   --line: #262c34;
   --accent: #f5a524;
   --good: #3fb950;
+  --good-bg: rgba(63, 185, 80, 0.12);
   --bad: #f85149;
+  --bad-bg: rgba(248, 81, 73, 0.12);
+  --warn: #d29922;
+  --warn-bg: rgba(210, 153, 34, 0.12);
+  --live: #58a6ff;
+  --live-bg: rgba(88, 166, 255, 0.12);
 }
 
 @theme inline {
@@ -27,16 +35,27 @@ body {
 
 @layer components {
   .btn {
-    @apply rounded-md px-3 py-1.5 font-medium text-black disabled:opacity-50;
+    @apply inline-flex items-center justify-center gap-2 rounded-md px-3 py-1.5 font-medium text-black disabled:cursor-not-allowed disabled:opacity-50;
     background: var(--accent);
   }
   .btn-ghost {
-    @apply rounded-md border px-3 py-1.5 disabled:opacity-50;
+    @apply inline-flex items-center justify-center gap-2 rounded-md border px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-50;
     border-color: var(--line);
   }
+  .btn-ghost:hover:not(:disabled) {
+    border-color: var(--accent);
+  }
   .field {
-    @apply rounded-md border px-2 py-1;
+    @apply w-full rounded-md border px-2 py-1.5;
     border-color: var(--line);
-    background: var(--panel);
+    background: var(--panel-2);
+  }
+  .field:focus {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
+  .label {
+    @apply text-xs font-medium uppercase tracking-wider;
+    color: var(--muted);
   }
 }
