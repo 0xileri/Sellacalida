@@ -12,6 +12,8 @@ import { GET as getEvidence } from '@/app/api/challenges/[id]/evidence/route';
 import { GET as getAgent } from '@/app/api/agents/[id]/route';
 import { POST as adminOffer } from '@/app/api/admin/offers/route';
 import { POST as devChallenge } from '@/app/api/admin/dev/challenge/route';
+import { resetPublicDevLimit } from '@/lib/server/devLimit';
+import { loadConfig } from '@/lib/server/config';
 
 const MATH = { templateId: 'math.exact_result', version: 1, network: 'mocknet', params: { op: 'add', left: '40', right: '2' } };
 const params = (id: string) => ({ params: Promise.resolve({ id }) });
@@ -80,6 +82,36 @@ describe('public routes', () => {
     ctxWith('42');
     expect((await getChallenge(new Request('http://t'), params('nope'))).status).toBe(404);
     expect((await getAgent(new Request('http://t'), params('nope'))).status).toBe(404);
+  });
+});
+
+describe('public play challenges on a mocknet preview', () => {
+  it('open to anyone, one at a time, capped per process; admin-only when not enabled', async () => {
+    resetPublicDevLimit();
+    const ctx = ctxWith('42', { ADMIN_TOKEN: 'secret-token', MOCKNET_PUBLIC_CHALLENGES: '1', MOCKNET_CHALLENGE_CAP: '2' });
+    const auth = { authorization: 'Bearer secret-token' };
+    const offers = [await (await adminOffer(post({}, auth))).json(), await (await adminOffer(post({}, auth))).json(), await (await adminOffer(post({}, auth))).json()];
+
+    const first = await devChallenge(post({ offerId: offers[0].id, spec: MATH }));
+    expect(first.status).toBe(201);
+    const tooSoon = await devChallenge(post({ offerId: offers[1].id, spec: MATH }));
+    expect(tooSoon.status).toBe(429);
+    expect((await tooSoon.json()).error).toMatch(/one play challenge at a time/);
+
+    ctx.config = { ...ctx.config, publicDevChallenges: { ...ctx.config.publicDevChallenges, minIntervalMs: 0 } };
+    expect((await devChallenge(post({ offerId: offers[1].id, spec: MATH }))).status).toBe(201);
+    const capped = await devChallenge(post({ offerId: offers[2].id, spec: MATH }));
+    expect(capped.status).toBe(429);
+    expect((await capped.json()).error).toMatch(/used up/);
+
+    ctx.config = { ...ctx.config, publicDevChallenges: { ...ctx.config.publicDevChallenges, enabled: false } };
+    expect((await devChallenge(post({ offerId: offers[2].id, spec: MATH }))).status).toBe(401);
+  });
+
+  it('can never be enabled off mocknet', () => {
+    const ctx = buildContextFromEnv({ NETWORK: 'mocknet', MOCKNET_PUBLIC_CHALLENGES: '1' });
+    expect(ctx.config.publicDevChallenges.enabled).toBe(true);
+    expect(loadConfig({ NETWORK: 'chipnet', TOKEN_CATEGORY: 'ab'.repeat(32), MOCKNET_PUBLIC_CHALLENGES: '1' }).publicDevChallenges.enabled).toBe(false);
   });
 });
 

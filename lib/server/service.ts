@@ -4,7 +4,7 @@
 // Order of trust: the chain decides what happened; this module only records it. The browser is
 // never trusted for amounts, addresses or escrow terms: accepts are re-checked from the raw tx.
 import { binToHex, decodeCashAddress, hexToBin } from '@bitauth/libauth';
-import { MockNetworkProvider, TransactionBuilder, type SpendableUtxo } from 'cashscript';
+import { TransactionBuilder, type SpendableUtxo } from 'cashscript';
 import { answerChallenge } from '../agent/runner';
 import { pkhToCashAddress, networkPrefix } from '../bch/address';
 import { buildAccept, buildCancel, withFee, DEFAULT_FEE_RATE } from '../bch/transactions';
@@ -119,6 +119,26 @@ export async function createOffer(
   };
   ctx.db.insertOffer(record);
   return record;
+}
+
+/** Keep config.autoOffers bonds open (the arena promises a fresh bond after each challenge). */
+export async function ensureOpenOffers(ctx: ServerContext): Promise<number> {
+  const want = ctx.config.autoOffers;
+  if (want <= 0 || !ctx.agentKey || !ctx.verifier) return 0;
+  // after a funding failure, wait a few minutes before trying again instead of failing every tick
+  if (Date.now() - ctx.runtime.lastAutoOfferError < 5 * 60 * 1000) return 0;
+  let made = 0;
+  while (ctx.db.offers.filter((o) => o.status === 'open').length < want) {
+    try {
+      await createOffer(ctx);
+      made += 1;
+    } catch (e) {
+      ctx.runtime.lastAutoOfferError = Date.now();
+      console.error('[sellacalida] could not publish a bond:', e instanceof Error ? e.message : e);
+      break;
+    }
+  }
+  return made;
 }
 
 function offerUtxo(o: OfferRecord, lockingBytecode: string): SpendableUtxo {
@@ -270,10 +290,9 @@ export async function confirmAccept(ctx: ServerContext, challengeId: string, txi
 // agent + verifier
 // ---------------------------------------------------------------------------------------------
 
-const inFlight = new Set<string>();
-
 /** Ask the live agent and commit its answer. Never computes or sees an expected answer. */
 export async function runAgent(ctx: ServerContext, challengeId: string): Promise<void> {
+  const { inFlight } = ctx.runtime;
   const c = ctx.db.challenge(challengeId);
   if (!c || c.status !== 'accepted' || ctx.answers.get(c.id) || inFlight.has(c.id)) return;
   if (!ctx.llm) {
@@ -303,12 +322,10 @@ function verifierChallenge(ctx: ServerContext, c: ChallengeRecord): VerifierChal
   return { network: c.network, offer: o.params, terms: c.terms, specJson: c.spec, escrow: c.escrow! };
 }
 
-let ticking = false;
-
 /** One pass over live challenges: settle, refund, or wait. Safe to call often. */
 export async function verifierTick(ctx: ServerContext, onlyId?: string): Promise<void> {
-  if (ticking || !ctx.verifier) return;
-  ticking = true;
+  if (ctx.runtime.ticking || !ctx.verifier) return;
+  ctx.runtime.ticking = true;
   try {
     const live = ctx.db.challenges.filter((c) => (c.status === 'accepted' || c.status === 'answered') && c.escrow && (!onlyId || c.id === onlyId));
     for (const c of live) {
@@ -340,7 +357,7 @@ export async function verifierTick(ctx: ServerContext, onlyId?: string): Promise
       ctx.db.updateChallenge(c.id, { status: 'abandoned' });
     }
   } finally {
-    ticking = false;
+    ctx.runtime.ticking = false;
   }
 }
 
@@ -355,7 +372,9 @@ export async function afterAccept(ctx: ServerContext, challengeId: string) {
 // ---------------------------------------------------------------------------------------------
 
 export async function devSimulateAccept(ctx: ServerContext, offerId: string, spec: unknown): Promise<ChallengeRecord> {
-  if (ctx.config.network !== 'mocknet' || !ctx.devChallenger || !(ctx.provider instanceof MockNetworkProvider)) {
+  // check the configured network, not `instanceof`: the context may have been built in another
+  // Next.js bundle whose MockNetworkProvider class is a different object
+  if (ctx.config.network !== 'mocknet' || !ctx.devChallenger) {
     throw new UserError('dev accept only exists on mocknet', 403);
   }
   const ch = ctx.devChallenger;

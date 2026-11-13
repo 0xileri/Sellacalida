@@ -31,6 +31,8 @@ export interface ServerContext {
   agentKey: KeyPair | null;
   /** mocknet only: a throwaway challenger for the dev "simulate accept" route */
   devChallenger: KeyPair | null;
+  /** process-wide runtime guards, kept on the shared context (see getServerContext) */
+  runtime: { ticking: boolean; inFlight: Set<string>; lastAutoOfferError: number };
 }
 
 export function keyPair(priv: Uint8Array, network: ServerConfig['network']): KeyPair {
@@ -79,30 +81,37 @@ export function buildContextFromEnv(env: Record<string, string | undefined> = pr
   const agentKey = agentPriv ? keyPair(agentPriv, config.network) : null;
   const devChallenger = mocknet ? keyPair(generatePrivateKey(), config.network) : null;
 
-  const ctx: ServerContext = { config, provider, db, answers, llm, verifier, agentKey, devChallenger };
-  if (provider instanceof MockNetworkProvider) seedMocknet(ctx, provider);
+  const ctx: ServerContext = {
+    config, provider, db, answers, llm, verifier, agentKey, devChallenger,
+    runtime: { ticking: false, inFlight: new Set(), lastAutoOfferError: 0 },
+  };
+  if (mocknet) seedMocknet(ctx, provider as MockNetworkProvider);
   return ctx;
 }
 
 /** Mocknet dev: give the agent and the dev challenger some BCH and test tokens. */
 function seedMocknet(ctx: ServerContext, provider: MockNetworkProvider) {
   provider.setBlockHeight(300_000);
+  // play money: enough for a few hundred challenges on a public preview before a restart
   const fund = (k: KeyPair, label: string, tokens: bigint) => {
     const txid = (i: number) => binToHex(sha256.hash(utf8ToBin(`mocknet-seed:${label}:${i}`)));
-    provider.addUtxo(binToHex(k.lock), { txid: txid(0), vout: 0, satoshis: 200_000n });
+    provider.addUtxo(binToHex(k.lock), { txid: txid(0), vout: 0, satoshis: 5_000_000n });
     provider.addUtxo(binToHex(k.lock), { txid: txid(1), vout: 0, satoshis: 5_000n, token: { category: ctx.config.tokenCategory, amount: tokens } });
   };
-  if (ctx.agentKey) fund(ctx.agentKey, 'agent', 100_000n);
-  if (ctx.devChallenger) fund(ctx.devChallenger, 'challenger', 10_000n);
+  if (ctx.agentKey) fund(ctx.agentKey, 'agent', 1_000_000n);
+  if (ctx.devChallenger) fund(ctx.devChallenger, 'challenger', 100_000n);
 }
 
-let current: ServerContext | null = null;
+// Next.js bundles instrumentation.ts (the verifier loop) and the route handlers separately, so a
+// module-level singleton would exist twice in one process: two DBs writing one file, and on mocknet
+// two different chains. globalThis is shared by every bundle in the process, so the context lives there.
+const holder = globalThis as unknown as { __sellacalidaServerContext?: ServerContext | null };
 
 export function getServerContext(): ServerContext {
-  if (!current) current = buildContextFromEnv();
-  return current;
+  if (!holder.__sellacalidaServerContext) holder.__sellacalidaServerContext = buildContextFromEnv();
+  return holder.__sellacalidaServerContext;
 }
 
 export function setServerContext(ctx: ServerContext | null) {
-  current = ctx;
+  holder.__sellacalidaServerContext = ctx;
 }

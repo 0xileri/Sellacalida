@@ -121,6 +121,6 @@ export function Disclosure() {
 export function NetworkBadge() {
   const c = useConfig();
   if (!c) return null;
-  const text = c.network === 'mainnet' ? 'mainnet' : c.network === 'chipnet' ? 'chipnet · test coins' : 'mocknet · local dev';
+  const text = c.network === 'mainnet' ? 'mainnet' : c.network === 'chipnet' ? 'chipnet · test coins' : 'mocknet · play money';
   return <Pill kind={c.network === 'mainnet' ? 'PASS' : 'NORESPONSE'}>{text}</Pill>;
 }
