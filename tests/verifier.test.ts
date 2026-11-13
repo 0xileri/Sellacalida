@@ -201,7 +201,7 @@ describe('verifier: refusals, errors and timeout', () => {
     const late = {
       challengeId: '00'.repeat(32), templateId: 'math.exact_result' as const, source: 'ai' as const, modelId: 'm',
       rawResponse: '-10', rawResponseHash: '', canonicalAnswer: '-10',
-      answerHash: binToHex(sha256.hash(utf8ToBin('-10'))), committedAtHeight: DEADLINE, committedAtWAT: '',
+      answerHash: binToHex(sha256.hash(utf8ToBin('-10'))), toolCalls: [], committedAtHeight: DEADLINE, committedAtWAT: '',
     };
     expect(planVerdict(c, late, DEADLINE + 1)).toMatchObject({ action: 'refuse' });
   });

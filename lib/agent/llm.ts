@@ -1,4 +1,4 @@
-// Minimal OpenAI-compatible chat client. Default provider: Orbio's gateway
+// Minimal OpenAI-compatible chat client with tool calling. Default provider: Orbio's gateway
 // (https://api.orbio.so/api/v1), which serves model ids like "anthropic/claude-sonnet-5.5" and
 // takes the key as "Authorization: Bearer <key>". Any OpenAI-compatible base URL works.
 //
@@ -6,21 +6,36 @@
 // that knows an expected answer (tests/boundary.test.ts).
 
 export const DEFAULT_LLM_BASE_URL = 'https://api.orbio.so/api/v1';
+export const DEFAULT_LLM_MODEL = 'anthropic/claude-sonnet-5.5';
 
-export interface ChatMessage {
-  role: 'system' | 'user' | 'assistant';
-  content: string;
+export interface ToolCall {
+  id: string;
+  type: 'function';
+  function: { name: string; arguments: string };
 }
+
+export interface ToolDef {
+  type: 'function';
+  function: { name: string; description: string; parameters: Record<string, unknown> };
+}
+
+export type ChatMessage =
+  | { role: 'system' | 'user'; content: string }
+  | { role: 'assistant'; content: string | null; tool_calls?: ToolCall[] }
+  | { role: 'tool'; tool_call_id: string; content: string };
 
 export interface ChatRequest {
   model: string;
   messages: ChatMessage[];
+  tools?: ToolDef[];
   maxTokens?: number;
   temperature?: number;
 }
 
 export interface ChatResult {
-  content: string;
+  content: string | null;
+  toolCalls: ToolCall[];
+  finishReason: string | null;
   /** model id the provider says actually served the request (falls back to the requested id) */
   servedModel: string;
   /** provider generation id, when given (e.g. "gen-...") */
@@ -65,6 +80,7 @@ export function openAiCompatibleClient(o: OpenAiCompatibleOptions): LlmClient {
             body: JSON.stringify({
               model: req.model,
               messages: req.messages,
+              ...(req.tools?.length ? { tools: req.tools } : {}),
               ...(req.maxTokens !== undefined ? { max_tokens: req.maxTokens } : {}),
               ...(req.temperature !== undefined ? { temperature: req.temperature } : {}),
             }),
@@ -82,13 +98,17 @@ export function openAiCompatibleClient(o: OpenAiCompatibleOptions): LlmClient {
         const body = (await res.json()) as {
           id?: string;
           model?: string;
-          choices?: { message?: { content?: string | null } }[];
+          choices?: { finish_reason?: string; message?: { content?: string | null; tool_calls?: ToolCall[] } }[];
           usage?: { prompt_tokens?: number; completion_tokens?: number; cost?: number };
         };
-        const content = body.choices?.[0]?.message?.content;
-        if (typeof content !== 'string') throw new Error('LLM response has no choices[0].message.content');
+        const choice = body.choices?.[0];
+        const content = typeof choice?.message?.content === 'string' ? choice.message.content : null;
+        const toolCalls = (choice?.message?.tool_calls ?? []).filter((t) => t?.type === 'function' && t.function?.name);
+        if (content === null && toolCalls.length === 0) throw new Error('LLM response has no choices[0].message content or tool calls');
         return {
           content,
+          toolCalls,
+          finishReason: choice?.finish_reason ?? null,
           servedModel: body.model || req.model,
           generationId: body.id ?? null,
           usage: body.usage
@@ -104,8 +124,9 @@ export function openAiCompatibleClient(o: OpenAiCompatibleOptions): LlmClient {
 /** Server-side config from the environment (.env.local). */
 export function llmFromEnv(env: Record<string, string | undefined> = process.env) {
   const apiKey = env.LLM_API_KEY;
-  const model = env.LLM_MODEL_ID;
   if (!apiKey) throw new Error('LLM_API_KEY is not set (put your Orbio key in .env.local)');
-  if (!model) throw new Error('LLM_MODEL_ID is not set (e.g. anthropic/claude-sonnet-5.5)');
-  return { client: openAiCompatibleClient({ apiKey, baseUrl: env.LLM_BASE_URL || DEFAULT_LLM_BASE_URL }), model };
+  return {
+    client: openAiCompatibleClient({ apiKey, baseUrl: env.LLM_BASE_URL || DEFAULT_LLM_BASE_URL }),
+    model: env.LLM_MODEL_ID || DEFAULT_LLM_MODEL,
+  };
 }

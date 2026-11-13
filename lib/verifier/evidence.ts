@@ -4,7 +4,7 @@
 import { binToHex, hexToBin } from '@bitauth/libauth';
 import { buildAttestation, verifyAttestation } from '../attestation';
 import type { SellacalidaNetwork, Verdict } from '../constants';
-import type { AnswerSource } from '../store/answers';
+import type { AnswerSource, ToolCallRecord } from '../store/answers';
 import { parseCanonical, sha256Hex } from '../templates/canonical';
 import { computeExpectedFromRaw, validateSpecForAccept, type CheckTrace } from '../templates/check';
 
@@ -25,6 +25,8 @@ export interface Evidence {
     rawResponseHash: string;
     canonicalAnswer: string;
     answerHash: string;
+    /** tool calls the agent made before answering (public chain reads) */
+    toolCalls: ToolCallRecord[];
     committedAtHeight: number;
     committedAtWAT: string;
   };

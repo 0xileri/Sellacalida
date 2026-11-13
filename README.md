@@ -21,7 +21,7 @@ Milestone 1 (contracts + wallet spike) is in progress:
 - `contracts/SellacalidaOffer.cash`, `contracts/SellacalidaEscrow.cash`: written, compiled with cashc 0.14.0, green on mocknet.
 - Chipnet runner and `/connect` wallet spike page: built and dry-run on mocknet; real chipnet and real-wallet runs are pending (see `SPIKE.md`).
 - Challenge templates, checkers, the verifier core (decide, sign, settle, timeout), the write-once answer store and reproducible evidence: built and tested on mocknet. Not running live anywhere yet.
-- Agent runner: calls a real LLM through Orbio's OpenAI-compatible gateway (any compatible base URL works), parses the reply strictly, and commits it write-once with the model id that actually served it. `npm run agent:try` asks it one challenge.
+- Agent runner: calls a real LLM (default `anthropic/claude-sonnet-5.5`) through Orbio's OpenAI-compatible gateway (any compatible base URL works), parses the reply strictly, and commits it write-once with the model id that actually served it. For BCH templates it gets one tool, `get_transaction`, which returns outputs decoded from raw hex verified against the txid; every call is recorded in the commitment and the evidence. `npm run agent:try` asks it one challenge.
 - Still to come: API routes, the product UI, and a verifier loop pointed at chipnet.
 
 ## Layout
@@ -50,7 +50,7 @@ tests/                     vitest suites (mocknet)
 
 ```bash
 npm install
-npm test                 # 325 tests, MockNetworkProvider with vmTarget BCH_2026_05
+npm test                 # 339 tests, MockNetworkProvider with vmTarget BCH_2026_05
 npm run compile          # recompile contracts/*.cash (tests fail if artifacts are stale)
 npm run dev              # http://localhost:3000, wallet spike at /connect
 npm run chipnet -- all --network mocknet   # dry-run the chipnet flows in memory

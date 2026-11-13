@@ -130,6 +130,7 @@ export async function runVerifier(c: VerifierChallenge, commitment: AnswerCommit
             rawResponseHash: commitment.rawResponseHash,
             canonicalAnswer: commitment.canonicalAnswer,
             answerHash: commitment.answerHash,
+            toolCalls: commitment.toolCalls ?? [],
             committedAtHeight: commitment.committedAtHeight,
             committedAtWAT: commitment.committedAtWAT,
           },

@@ -10,6 +10,16 @@ import { formatWAT } from '../time';
 
 export type AnswerSource = 'ai' | 'fixture';
 
+/** One tool call the agent made before answering (public chain reads only). */
+export interface ToolCallRecord {
+  name: string;
+  arguments: string;
+  ok: boolean;
+  /** sha256 of the exact tool result text the model saw */
+  resultSha256: string | null;
+  error?: string;
+}
+
 export interface AnswerCommitInput {
   challengeId: string; // hex
   templateId: TemplateId;
@@ -19,6 +29,7 @@ export interface AnswerCommitInput {
   rawResponse: string;
   /** the parsed answer; '' when the model's reply could not be parsed (it then simply fails) */
   canonicalAnswer: string;
+  toolCalls?: ToolCallRecord[];
 }
 
 export interface AnswerCommitment {
@@ -30,6 +41,7 @@ export interface AnswerCommitment {
   rawResponseHash: string;
   canonicalAnswer: string;
   answerHash: string;
+  toolCalls: ToolCallRecord[];
   committedAtHeight: number;
   committedAtWAT: string;
 }
@@ -70,6 +82,7 @@ export class AnswerStore {
       rawResponseHash: sha256Hex(input.rawResponse),
       canonicalAnswer: input.canonicalAnswer,
       answerHash: sha256Hex(input.canonicalAnswer),
+      toolCalls: Object.freeze((input.toolCalls ?? []).map((t) => Object.freeze({ ...t }))) as ToolCallRecord[],
       committedAtHeight: ctx.currentHeight,
       committedAtWAT: formatWAT(ctx.now),
     });

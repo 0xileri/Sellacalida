@@ -38,7 +38,7 @@ describe('openAiCompatibleClient', () => {
       model: 'anthropic/claude-sonnet-5.5', messages: [{ role: 'user', content: 'hi' }], max_tokens: 10,
     });
     expect(r).toEqual({
-      content: '42', servedModel: 'anthropic/claude-sonnet-5.5', generationId: 'gen-123',
+      content: '42', toolCalls: [], finishReason: null, servedModel: 'anthropic/claude-sonnet-5.5', generationId: 'gen-123',
       usage: { promptTokens: 50, completionTokens: 3, cost: 0.00013 },
     });
   });
@@ -81,6 +81,8 @@ describe('parseAnswer is strict', () => {
     ['bch.output_token_count', '`3`', '3'],
     ['bch.output_token_count', '```\n3\n```', '3'],
     ['bch.output_token_count', '3.', '3'],
+    ['bch.output_token_count', '**3**', '3'], // seen live from Sonnet 5.5
+    ['bch.total_sats_to_address', '**4000**', '4000'],
     ['bch.output_token_count', 'The answer is 3', '3'],
     ['bch.output_token_count', 'Output 3 holds it.', '3'],
     ['bch.output_token_count', '03', ''],
@@ -108,7 +110,9 @@ const SPEC: ChallengeSpec = {
 const ID = 'cd'.repeat(32);
 
 function stubClient(content: string, servedModel = 'anthropic/claude-sonnet-5.5'): LlmClient & { complete: ReturnType<typeof vi.fn> } {
-  return { complete: vi.fn(async () => ({ content, servedModel, generationId: 'gen-1', usage: null })) };
+  return {
+    complete: vi.fn(async () => ({ content, toolCalls: [], finishReason: 'stop', servedModel, generationId: 'gen-1', usage: null })),
+  };
 }
 
 describe('answerChallenge', () => {
