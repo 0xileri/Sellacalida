@@ -21,7 +21,8 @@ Milestone 1 (contracts + wallet spike) is in progress:
 - `contracts/SellacalidaOffer.cash`, `contracts/SellacalidaEscrow.cash`: written, compiled with cashc 0.14.0, green on mocknet.
 - Chipnet runner and `/connect` wallet spike page: built and dry-run on mocknet; real chipnet and real-wallet runs are pending (see `SPIKE.md`).
 - Challenge templates, checkers, the verifier core (decide, sign, settle, timeout), the write-once answer store and reproducible evidence: built and tested on mocknet. Not running live anywhere yet.
-- Still to come: the LLM agent runner, API routes, the product UI, and a verifier loop pointed at chipnet.
+- Agent runner: calls a real LLM through Orbio's OpenAI-compatible gateway (any compatible base URL works), parses the reply strictly, and commits it write-once with the model id that actually served it. `npm run agent:try` asks it one challenge.
+- Still to come: API routes, the product UI, and a verifier loop pointed at chipnet.
 
 ## Layout
 
@@ -39,7 +40,7 @@ lib/templates/canonical.ts canonical spec JSON and specHash
 lib/templates/check/       server only: accept-time validation and the four checkers
 lib/store/answers.ts       write-once answer commitments (model id, raw response hash, answer hash)
 lib/verifier/              server only: decide, sign, settle / timeout, evidence + reproduce, key loading
-lib/agent/                 LLM runner (next; can never reach checkers or the verifier)
+lib/agent/                 LLM runner: Orbio / OpenAI-compatible client, strict parser, ask-then-commit
 app/connect/               wallet spike page
 scripts/chipnet/           chipnet runner (keygen, genesis, every contract path)
 tests/                     vitest suites (mocknet)
@@ -49,10 +50,11 @@ tests/                     vitest suites (mocknet)
 
 ```bash
 npm install
-npm test                 # 295 tests, MockNetworkProvider with vmTarget BCH_2026_05
+npm test                 # 325 tests, MockNetworkProvider with vmTarget BCH_2026_05
 npm run compile          # recompile contracts/*.cash (tests fail if artifacts are stale)
 npm run dev              # http://localhost:3000, wallet spike at /connect
 npm run chipnet -- all --network mocknet   # dry-run the chipnet flows in memory
+npm run agent:try        # ask the live agent one challenge (needs LLM_API_KEY, LLM_MODEL_ID)
 ```
 
 Chipnet and wallet instructions: [`SPIKE.md`](./SPIKE.md).
