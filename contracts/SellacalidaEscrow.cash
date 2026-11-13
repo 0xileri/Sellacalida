@@ -1,0 +1,134 @@
+pragma cashscript ^0.14.0;
+
+// SellacalidaEscrow
+// Holds bondAmount + feeAmount of one fungible CashToken category until either
+//   settle():  a verifier-signed 156-byte attestation (PASS / FAIL / NORESPONSE), or
+//   timeout(): the block-height expiry, which refunds both sides.
+//
+// Spec: SELLACALIDA_SPEC.md section 3.2 and section 4.
+// Every constant here is mirrored in lib/constants.ts and locked by tests.
+
+int constant MIN_OUTPUT_SATS = 1000;
+
+// Verdict bytes
+// 0x01 PASS        -> agent receives bond + fee
+// 0x02 FAIL        -> challenger receives bond + fee
+// 0x03 NORESPONSE  -> challenger receives bond + fee, only after the answer deadline
+
+contract SellacalidaEscrow(
+    bytes20 agentPkh,
+    bytes20 challengerPkh,
+    pubkey verifierPk,
+    int bondAmount,
+    int feeAmount,
+    // unreversed (VM order) 32-byte category, no capability suffix
+    bytes32 tokenCategory,
+    // 1 byte: 0x00 mainnet, 0x01 chipnet, 0x02 mocknet
+    bytes networkId,
+    bytes32 challengeId,
+    bytes32 specHash,
+    int expiryHeight,
+    int verifierGraceBlocks
+) {
+    // Input table:
+    //   0: this escrow UTXO, category == tokenCategory (32 bytes), amount == bond + fee
+    //   1 (optional): settler BCH fee input, no tokens
+    // Output table (1 or 2 outputs):
+    //   0: P2PKH(winner), category == tokenCategory, amount == bond + fee, value >= MIN_OUTPUT_SATS
+    //   1 (optional): feeLockingBytecode, no tokens, value >= MIN_OUTPUT_SATS
+    function settle(datasig verifierSig, bytes message, bytes feeLockingBytecode) {
+        int totalAmount = bondAmount + feeAmount;
+
+        // ---- inputs ----
+        require(this.activeInputIndex == 0);
+        require(tx.inputs.length == 1 || tx.inputs.length == 2);
+        // equality with a bytes32 also enforces length 32 (fungible-only, no NFT capability byte)
+        require(tx.inputs[0].tokenCategory == tokenCategory);
+        require(tx.inputs[0].tokenAmount == totalAmount);
+        if (tx.inputs.length == 2) {
+            require(tx.inputs[1].tokenCategory == 0x);
+        }
+
+        // ---- attestation parse (layout: lib/attestation.ts ATTEST_OFFSETS) ----
+        require(message.length == 156);
+        bytes prefix, bytes r1 = message.split(22);
+        require(prefix == bytes('SELLACALIDA-ATTEST-v1:'));
+        bytes networkIdB, bytes r2 = r1.split(1);
+        require(networkIdB == networkId);
+        bytes challengeIdB, bytes r3 = r2.split(32);
+        require(challengeIdB == challengeId);
+        bytes outpointTxidB, bytes r4 = r3.split(32);
+        require(outpointTxidB == tx.inputs[this.activeInputIndex].outpointTransactionHash);
+        bytes outpointIndexB, bytes r5 = r4.split(4);
+        // 4-byte little-endian outpoint index (OP_NUM2BIN), locked by tests against the TS serializer
+        require(outpointIndexB == toPaddedBytes(tx.inputs[this.activeInputIndex].outpointIndex, 4));
+        bytes specHashB, bytes r6 = r5.split(32);
+        require(specHashB == specHash);
+        bytes verdictB, bytes answerHashB = r6.split(1);
+        require(answerHashB.length == 32);
+
+        bytes20 winnerPkh = challengerPkh;
+        if (verdictB == 0x01) {
+            // PASS
+            winnerPkh = agentPkh;
+        } else if (verdictB == 0x02) {
+            // FAIL: challenger wins, no extra height lock
+            require(answerHashB.length == 32);
+        } else {
+            // NORESPONSE: only after the answer deadline, and only with no committed answer
+            require(verdictB == 0x03);
+            require(answerHashB == 0x0000000000000000000000000000000000000000000000000000000000000000);
+            require(tx.time >= expiryHeight - verifierGraceBlocks);
+        }
+
+        // checkDataSig SHA-256s the raw message itself
+        require(checkDataSig(verifierSig, message, verifierPk));
+
+        // ---- outputs ----
+        require(tx.outputs.length == 1 || tx.outputs.length == 2);
+        require(tx.outputs[0].lockingBytecode == new LockingBytecodeP2PKH(winnerPkh));
+        require(tx.outputs[0].tokenCategory == tokenCategory);
+        require(tx.outputs[0].tokenAmount == totalAmount);
+        require(tx.outputs[0].value >= MIN_OUTPUT_SATS);
+        if (tx.outputs.length == 2) {
+            require(tx.outputs[1].lockingBytecode == feeLockingBytecode);
+            require(tx.outputs[1].tokenCategory == 0x);
+            require(tx.outputs[1].value >= MIN_OUTPUT_SATS);
+        }
+    }
+
+    // Verifier-unavailable path. Anyone may broadcast once tx.time (nLocktime) >= expiryHeight.
+    // Input table: same as settle.
+    // Output table (2 or 3 outputs):
+    //   0: P2PKH(agentPkh),      category == tokenCategory, amount == bondAmount, value >= MIN_OUTPUT_SATS
+    //   1: P2PKH(challengerPkh), category == tokenCategory, amount == feeAmount,  value >= MIN_OUTPUT_SATS
+    //   2 (optional): feeLockingBytecode, no tokens, value >= MIN_OUTPUT_SATS
+    function timeout(bytes feeLockingBytecode) {
+        require(tx.time >= expiryHeight);
+
+        // ---- inputs ----
+        require(this.activeInputIndex == 0);
+        require(tx.inputs.length == 1 || tx.inputs.length == 2);
+        require(tx.inputs[0].tokenCategory == tokenCategory);
+        require(tx.inputs[0].tokenAmount == bondAmount + feeAmount);
+        if (tx.inputs.length == 2) {
+            require(tx.inputs[1].tokenCategory == 0x);
+        }
+
+        // ---- outputs ----
+        require(tx.outputs.length == 2 || tx.outputs.length == 3);
+        require(tx.outputs[0].lockingBytecode == new LockingBytecodeP2PKH(agentPkh));
+        require(tx.outputs[0].tokenCategory == tokenCategory);
+        require(tx.outputs[0].tokenAmount == bondAmount);
+        require(tx.outputs[0].value >= MIN_OUTPUT_SATS);
+        require(tx.outputs[1].lockingBytecode == new LockingBytecodeP2PKH(challengerPkh));
+        require(tx.outputs[1].tokenCategory == tokenCategory);
+        require(tx.outputs[1].tokenAmount == feeAmount);
+        require(tx.outputs[1].value >= MIN_OUTPUT_SATS);
+        if (tx.outputs.length == 3) {
+            require(tx.outputs[2].lockingBytecode == feeLockingBytecode);
+            require(tx.outputs[2].tokenCategory == 0x);
+            require(tx.outputs[2].value >= MIN_OUTPUT_SATS);
+        }
+    }
+}

@@ -1,0 +1,173 @@
+pragma cashscript ^0.14.0;
+
+// SellacalidaOffer
+// Holds an agent's bond (one fungible CashToken category) until the agent cancels or a
+// challenger accepts in a single transaction from their own wallet. accept() forces output 0
+// to be a correctly parameterized SellacalidaEscrow by rebuilding its redeem script on-chain.
+//
+// Spec: SELLACALIDA_SPEC.md section 3.1.
+// Every constant here is mirrored in lib/constants.ts and locked by tests.
+
+int constant MIN_OUTPUT_SATS = 1000;
+int constant MAX_HEIGHT = 500_000_000;
+int constant MIN_VERIFIER_GRACE = 18;
+
+// Minimal data push of a positive VM integer, byte-identical to
+// libauth encodeDataPush(bigIntToVmNumber(v)), which is what CashScript 0.14 uses to bake
+// constructor arguments into a redeem script:
+//   1..16       -> OP_1..OP_16 (0x51..0x60)
+//   otherwise   -> <length byte> <minimal VM number>   (valid while length <= 75)
+// Callers must guarantee v > 0. Locked by tests/encodeRedeemScript.test.ts.
+function pushPositiveInt(int v) returns (bytes) {
+    bytes vb = bytes(v);
+    bytes out = toPaddedBytes(vb.length, 1) + vb;
+    if (v <= 16) {
+        out = toPaddedBytes(v + 80, 1);
+    }
+    return out;
+}
+
+// Minimal data push of the 1-byte networkId (0x00, 0x01 or 0x02):
+//   0x00 -> 0x01 0x00 (a 1-byte push; OP_0 would push the empty string)
+//   0x01 -> OP_1 (0x51)
+//   0x02 -> OP_2 (0x52)
+function pushNetworkId(bytes n) returns (bytes) {
+    bytes out = 0x01 + n;
+    if (n == 0x01) {
+        out = 0x51;
+    }
+    if (n == 0x02) {
+        out = 0x52;
+    }
+    return out;
+}
+
+contract SellacalidaOffer(
+    bytes20 agentPkh,
+    pubkey verifierPk,
+    int bondAmount,
+    int feeAmount,
+    // unreversed (VM order) 32-byte category, no capability suffix
+    bytes32 tokenCategory,
+    // 1 byte: 0x00 mainnet, 0x01 chipnet, 0x02 mocknet
+    bytes networkId,
+    int maxDeadlineDelta,
+    int verifierGraceBlocks,
+    // SellacalidaEscrow bytecode without constructor args, exactly as in the artifact
+    bytes escrowBody
+) {
+    // Agent reclaims an unaccepted bond.
+    // Input table:
+    //   0: this offer UTXO, category == tokenCategory (32 bytes), amount == bondAmount
+    //   1 (optional): BCH fee input, no tokens
+    // Output table (exactly 1 output):
+    //   0: P2PKH(agentPkh), category == tokenCategory, amount == bondAmount, value >= MIN_OUTPUT_SATS
+    function cancel(pubkey agentPk, sig agentSig) {
+        require(bondAmount > 0);
+        require(feeAmount > 0);
+
+        // ---- inputs ----
+        require(this.activeInputIndex == 0);
+        require(tx.inputs.length == 1 || tx.inputs.length == 2);
+        require(tx.inputs[0].tokenCategory == tokenCategory);
+        require(tx.inputs[0].tokenAmount == bondAmount);
+        if (tx.inputs.length == 2) {
+            require(tx.inputs[1].tokenCategory == 0x);
+        }
+
+        // ---- outputs ----
+        require(tx.outputs.length == 1);
+        require(tx.outputs[0].lockingBytecode == new LockingBytecodeP2PKH(agentPkh));
+        require(tx.outputs[0].tokenCategory == tokenCategory);
+        require(tx.outputs[0].tokenAmount == bondAmount);
+        require(tx.outputs[0].value >= MIN_OUTPUT_SATS);
+
+        // ---- authority ----
+        require(hash160(agentPk) == agentPkh);
+        require(checkSig(agentSig, agentPk));
+    }
+
+    // Challenger accepts in one transaction from their own wallet.
+    // Input table:
+    //   0: this offer UTXO, category == tokenCategory (32 bytes), amount == bondAmount
+    //   1: challenger token UTXO at P2PKH(challengerPkh), same category, amount >= feeAmount
+    //   2 (optional): BCH fee input, no tokens
+    // Output table (exactly 2 outputs):
+    //   0: escrow P2SH32 (rebuilt below), category == tokenCategory, amount == bond + fee,
+    //      value == escrowSatoshis >= MIN_OUTPUT_SATS
+    //   1: P2PKH(challengerPkh), value >= MIN_OUTPUT_SATS, and either
+    //        exact path  (input1 amount == fee): no tokens
+    //        change path (input1 amount  > fee): same category, amount == input1 amount - fee
+    function accept(
+        bytes20 challengerPkh,
+        bytes32 challengeId,
+        bytes32 specHash,
+        int expiryHeight,
+        int escrowSatoshis,
+        bytes escrowRedeemScript
+    ) {
+        require(bondAmount > 0);
+        require(feeAmount > 0);
+
+        // ---- deadline bound ----
+        require(expiryHeight < MAX_HEIGHT);
+        require(verifierGraceBlocks >= MIN_VERIFIER_GRACE);
+        require(maxDeadlineDelta > verifierGraceBlocks);
+        require(expiryHeight > verifierGraceBlocks);
+        // tx.time is nLocktime; the tx cannot be mined before it, so
+        // expiryHeight <= nLocktime + maxDeadlineDelta <= mine height + maxDeadlineDelta
+        require(tx.time >= expiryHeight - maxDeadlineDelta);
+
+        // ---- inputs ----
+        require(this.activeInputIndex == 0);
+        require(tx.inputs.length == 2 || tx.inputs.length == 3);
+        require(tx.inputs[0].tokenCategory == tokenCategory);
+        require(tx.inputs[0].tokenAmount == bondAmount);
+        bytes challengerLock = new LockingBytecodeP2PKH(challengerPkh);
+        require(tx.inputs[1].tokenCategory == tokenCategory);
+        require(tx.inputs[1].tokenAmount >= feeAmount);
+        require(tx.inputs[1].lockingBytecode == challengerLock);
+        if (tx.inputs.length == 3) {
+            require(tx.inputs[2].tokenCategory == 0x);
+        }
+        int changeAmount = tx.inputs[1].tokenAmount - feeAmount;
+
+        // ---- escrow redeem script ----
+        // CashScript 0.14 redeem script = constructor args in REVERSE order, each minimally pushed,
+        // followed by the contract body. Escrow args, in declaration order:
+        //   agentPkh, challengerPkh, verifierPk, bondAmount, feeAmount, tokenCategory,
+        //   networkId, challengeId, specHash, expiryHeight, verifierGraceBlocks
+        // expiryHeight > verifierGraceBlocks >= 18 and bond/fee > 0, so every int push is positive.
+        require(networkId == 0x00 || networkId == 0x01 || networkId == 0x02);
+        bytes expectedRedeemScript = pushPositiveInt(verifierGraceBlocks)
+            + pushPositiveInt(expiryHeight)
+            + 0x20 + specHash
+            + 0x20 + challengeId
+            + pushNetworkId(networkId)
+            + 0x20 + tokenCategory
+            + pushPositiveInt(feeAmount)
+            + pushPositiveInt(bondAmount)
+            + 0x21 + verifierPk
+            + 0x14 + challengerPkh
+            + 0x14 + agentPkh
+            + escrowBody;
+        require(escrowRedeemScript == expectedRedeemScript);
+
+        // ---- outputs ----
+        require(tx.outputs.length == 2);
+        require(tx.outputs[0].lockingBytecode == new LockingBytecodeP2SH32(hash256(escrowRedeemScript)));
+        require(tx.outputs[0].tokenCategory == tokenCategory);
+        require(tx.outputs[0].tokenAmount == bondAmount + feeAmount);
+        require(escrowSatoshis >= MIN_OUTPUT_SATS);
+        require(tx.outputs[0].value == escrowSatoshis);
+
+        require(tx.outputs[1].lockingBytecode == challengerLock);
+        require(tx.outputs[1].value >= MIN_OUTPUT_SATS);
+        if (changeAmount == 0) {
+            require(tx.outputs[1].tokenCategory == 0x);
+        } else {
+            require(tx.outputs[1].tokenCategory == tokenCategory);
+            require(tx.outputs[1].tokenAmount == changeAmount);
+        }
+    }
+}
