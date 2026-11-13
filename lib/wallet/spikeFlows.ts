@@ -117,6 +117,8 @@ export function buildAcceptFromWallet(o: {
   challenger: WalletAddress;
   walletUtxos: WalletUtxo[];
   locktime: number;
+  /** must match what the server will check on confirm */
+  escrowSatoshis?: bigint;
 }): WalletTx & { terms: ChallengeTerms } {
   const category = o.offer.tokenCategory;
   // input 1 must sit at P2PKH(challengerPkh); use the challenger address's own token UTXO
@@ -129,7 +131,7 @@ export function buildAcceptFromWallet(o: {
   const escrowArgs = escrowArgsFor(o.offer, terms);
   const base = {
     provider: o.provider, offer: o.offer, offerContract: makeOfferContract(o.offer, o.provider), offerUtxo: o.offerUtxo,
-    terms, escrowArgs, escrowSatoshis: SPIKE_ESCROW_SATS, locktime: o.locktime,
+    terms, escrowArgs, escrowSatoshis: o.escrowSatoshis ?? SPIKE_ESCROW_SATS, locktime: o.locktime,
     challengerTokenInput: { utxo: tokenUtxo, unlocker: placeholderP2PKHUnlocker(tokenUtxo.address), placeholder: true },
   };
   try {

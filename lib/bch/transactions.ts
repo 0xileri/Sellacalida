@@ -158,9 +158,12 @@ export function buildAccept(i: AcceptInput & { escrowArgs: EscrowArgs }): Transa
         amount: i.escrowSatoshis,
         token: { category: i.offer.tokenCategory, amount: i.offer.bondAmount + i.offer.feeAmount },
       });
+      // clamp while measuring so a short wallet gets the clear "not enough BCH" error below,
+      // not a dust error from the builder (unsafe test builds keep the raw amount)
+      const change = inSats - i.escrowSatoshis - fee;
       b.addOutput({
         to: challengerLock,
-        amount: inSats - i.escrowSatoshis - fee,
+        amount: i.unsafeSkipAppChecks || change >= MIN_OUTPUT_SATS ? change : MIN_OUTPUT_SATS,
         ...(changeAmount > 0n ? { token: { category: i.offer.tokenCategory, amount: changeAmount } } : {}),
       });
       b.setLocktime(i.locktime);

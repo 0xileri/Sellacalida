@@ -3,7 +3,7 @@
 // WizardConnect wallet spike (spec section 11). Each button is one checklist step; every wallet
 // response or error lands in the log, which copies out as markdown for SPIKE.md.
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useWizardConnect, WizardConnectQRDialog } from '@wizardconnect/react';
+import { useWallet } from '../providers';
 import { hexToBin, sha256, utf8ToBin } from '@bitauth/libauth';
 import type { SpendableUtxo } from 'cashscript';
 import { PUSD_CATEGORY_MAINNET, type SellacalidaNetwork } from '@/lib/constants';
@@ -81,7 +81,8 @@ function short(s: string, n = 8) {
 }
 
 export default function ConnectSpike() {
-  const wc = useWizardConnect({ dappName: 'Sellacalida' });
+  // the app-wide WizardConnect session (app/providers.tsx), which also renders the QR dialog
+  const { wc } = useWallet();
   const [network, setNetwork] = useState<Net>('chipnet');
   const [category, setCategory] = useState(defaults.chipnet.category);
   const [verifierPk, setVerifierPk] = useState(defaults.chipnet.verifierPk);
@@ -428,15 +429,6 @@ export default function ConnectSpike() {
         ))}
       </section>
 
-      {wc.uri && wc.qrUri && (
-        <WizardConnectQRDialog
-          // keep the QR up while a new pairing waits for a wallet, even through a relay retry
-          show={!wc.walletName && (wc.state === 'connecting' || wc.state === 'reconnecting')}
-          onClose={() => void wc.disconnect()}
-          uri={wc.uri}
-          qrUri={wc.qrUri}
-        />
-      )}
       <p className="mt-6 text-xs text-[var(--muted)]">
         Contract inputs never ask the wallet for keys except the cancel path, which uses placeholderSignature and
         placeholderPublicKey. Everything here is stored only in this browser.
