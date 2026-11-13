@@ -6,7 +6,7 @@ import { join, relative } from 'node:path';
 import { binToHex, getDustThreshold, hexToBin, swapEndianness } from '@bitauth/libauth';
 import { compileFile } from 'cashc';
 import {
-  KNOWN_WRONG_PUSD_CATEGORY, MAX_HEIGHT, MIN_OUTPUT_SATS, MIN_VERIFIER_GRACE, PUSD_CATEGORY_MAINNET,
+  KNOWN_WRONG_PUSD_CATEGORY, MAX_FEE_SATS, MAX_HEIGHT, MIN_OUTPUT_SATS, MIN_VERIFIER_GRACE, PUSD_CATEGORY_MAINNET,
 } from '@/lib/constants';
 import { ATTEST_OFFSETS, ATTEST_PREFIX } from '@/lib/attestation';
 import { fromContractCategory, toContractCategory, toOutpointTxHash } from '@/lib/tokenCategory';
@@ -45,6 +45,9 @@ describe('contract constants match lib/constants.ts', () => {
   it('MIN_OUTPUT_SATS', () => {
     expect(grab(offerSrc, 'MIN_OUTPUT_SATS')).toBe(MIN_OUTPUT_SATS);
     expect(grab(escrowSrc, 'MIN_OUTPUT_SATS')).toBe(MIN_OUTPUT_SATS);
+  });
+  it('MAX_FEE_SATS', () => {
+    expect(grab(escrowSrc, 'MAX_FEE_SATS')).toBe(MAX_FEE_SATS);
   });
   it('MAX_HEIGHT and MIN_VERIFIER_GRACE', () => {
     expect(grab(offerSrc, 'MAX_HEIGHT')).toBe(BigInt(MAX_HEIGHT));

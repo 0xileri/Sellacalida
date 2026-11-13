@@ -6,7 +6,7 @@ Spec: `SELLACALIDA_SPEC.md` section 11. Gate date: 16 November 2026 (WAT).
 
 | Area | Status |
 | --- | --- |
-| Contracts on mocknet | **Green.** 174 vitest tests, `npm test`. |
+| Contracts on mocknet | **Green.** 183 vitest tests, `npm test`. |
 | Spike flows with a simulated wallet | **Green on mocknet.** `tests/spikeFlows.test.ts` signs every `/connect` flow with a mock WizardConnect wallet (fills P2PKH and contract placeholders the way Paytaca is documented to). This is not a real wallet result. |
 | Chipnet runs | **Not run yet.** The build container cannot reach Electrum (WSS on port 50004) or the WizardConnect relay, so chipnet has to be run from a normal machine. Commands below. |
 | Real wallets (Paytaca, Selene) | **Not run yet.** Needs a phone or browser wallet. Fill in the tables below. |
@@ -63,9 +63,10 @@ Repeat the table for the second wallet if time allows.
 
 ## Facts pinned so far (from code and tests, not wallets)
 
-- Redeem script sizes: offer 911 bytes, escrow 581 bytes.
-- Transaction sizes: cancel ~1.14 kB, accept ~1.90 kB, settle ~0.93 kB, timeout ~0.78 kB (1 sat/byte relay minimum).
+- Redeem script sizes: offer 949 bytes, escrow 619 bytes.
+- Transaction sizes: cancel ~1.18 kB, accept ~1.98 kB, settle ~0.97 kB, timeout ~0.82 kB (1 sat/byte relay minimum).
 - Token dust: P2PKH + FT 651 sats, P2SH32 + FT 681 sats, so `MIN_OUTPUT_SATS = 1000` holds.
-- An offer UTXO needs about 3,000 sats or more: the cancel tx has to pay ~1.25k sats in fees and still leave 1,000 on output 0. The spike and the chipnet runner use 3,000; escrows use 3,000 so a settle or timeout can pay its own fee.
+- An offer UTXO needs about 3,000 sats or more: the cancel tx has to pay ~1.3k sats in fees and still leave 1,000 on output 0. The spike and the chipnet runner use 3,000; escrows use 3,000 so a settle or timeout can pay its own fee.
+- settle and timeout are unsigned, so anyone can rebuild them from the mempool. The escrow pins the BCH: with a fee payer the winner (or the refunds) keep every escrow sat; without one the escrow may pay at most `MAX_FEE_SATS = 2000` to miners.
 - `inputPaths` entries are `[inputIndex, 'receive' | 'change', addressIndex]`. Accept lists only the wallet's own input(s), never input 0 (the offer). Cancel lists input 0 because the wallet fills the agent's sig and pubkey placeholders.
 - `signTransaction` is sent `generateWcTransactionObject({ broadcast: false })` plus `inputPaths`; the dapp broadcasts the signed hex itself so errors stay visible.

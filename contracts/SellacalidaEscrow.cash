@@ -9,6 +9,10 @@ pragma cashscript ^0.14.0;
 // Every constant here is mirrored in lib/constants.ts and locked by tests.
 
 int constant MIN_OUTPUT_SATS = 1000;
+// Cap on the miner fee the escrow's own sats may pay when no fee payer joins (about 2 sat/byte for a
+// ~0.93 kB settle). settle and timeout carry no signature, so anyone can rebroadcast them; these
+// value rules make sure a copier can never route the escrow's spare BCH to themselves.
+int constant MAX_FEE_SATS = 2000;
 
 // Verdict bytes
 // 0x01 PASS        -> agent receives bond + fee
@@ -36,6 +40,9 @@ contract SellacalidaEscrow(
     // Output table (1 or 2 outputs):
     //   0: P2PKH(winner), category == tokenCategory, amount == bond + fee, value >= MIN_OUTPUT_SATS
     //   1 (optional): feeLockingBytecode, no tokens, value >= MIN_OUTPUT_SATS
+    // Value rule:
+    //   1 output:  output 0 value >= escrow value - MAX_FEE_SATS (the escrow pays a capped miner fee)
+    //   2 outputs: output 0 value >= escrow value (the fee payer pays the miner fee from its own input)
     function settle(datasig verifierSig, bytes message, bytes feeLockingBytecode) {
         int totalAmount = bondAmount + feeAmount;
 
@@ -94,6 +101,9 @@ contract SellacalidaEscrow(
             require(tx.outputs[1].lockingBytecode == feeLockingBytecode);
             require(tx.outputs[1].tokenCategory == 0x);
             require(tx.outputs[1].value >= MIN_OUTPUT_SATS);
+            require(tx.outputs[0].value >= tx.inputs[0].value);
+        } else {
+            require(tx.outputs[0].value >= tx.inputs[0].value - MAX_FEE_SATS);
         }
     }
 
@@ -103,6 +113,9 @@ contract SellacalidaEscrow(
     //   0: P2PKH(agentPkh),      category == tokenCategory, amount == bondAmount, value >= MIN_OUTPUT_SATS
     //   1: P2PKH(challengerPkh), category == tokenCategory, amount == feeAmount,  value >= MIN_OUTPUT_SATS
     //   2 (optional): feeLockingBytecode, no tokens, value >= MIN_OUTPUT_SATS
+    // Value rule (outputs 0 + 1 together):
+    //   2 outputs: >= escrow value - MAX_FEE_SATS
+    //   3 outputs: >= escrow value (the broadcaster pays the miner fee from its own input)
     function timeout(bytes feeLockingBytecode) {
         require(tx.time >= expiryHeight);
 
@@ -125,10 +138,14 @@ contract SellacalidaEscrow(
         require(tx.outputs[1].tokenCategory == tokenCategory);
         require(tx.outputs[1].tokenAmount == feeAmount);
         require(tx.outputs[1].value >= MIN_OUTPUT_SATS);
+        int refunded = tx.outputs[0].value + tx.outputs[1].value;
         if (tx.outputs.length == 3) {
             require(tx.outputs[2].lockingBytecode == feeLockingBytecode);
             require(tx.outputs[2].tokenCategory == 0x);
             require(tx.outputs[2].value >= MIN_OUTPUT_SATS);
+            require(refunded >= tx.inputs[0].value);
+        } else {
+            require(refunded >= tx.inputs[0].value - MAX_FEE_SATS);
         }
     }
 }
