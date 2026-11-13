@@ -1,7 +1,7 @@
 // The verifier loop: one in-process timer, no separate worker (spec section 2). Started once from
 // instrumentation.ts when the Node server boots.
 import { serverCtx } from './http';
-import { refreshOffers, verifierTick } from './service';
+import { ensureOpenOffers, refreshOffers, verifierTick } from './service';
 
 let started = false;
 
@@ -21,6 +21,7 @@ export function startVerifierLoop() {
     try {
       await refreshOffers(ctx);
       await verifierTick(ctx);
+      await ensureOpenOffers(ctx);
     } catch (e) {
       console.error('[sellacalida] tick failed:', e instanceof Error ? e.message : e);
     }

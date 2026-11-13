@@ -19,6 +19,10 @@ export interface ServerConfig {
   offerSats: bigint;
   escrowSats: bigint;
   verifierTickMs: number;
+  /** the loop keeps this many bonds open, publishing from the agent wallet (0 = manual only) */
+  autoOffers: number;
+  /** mocknet preview only: anyone may run play challenges through the dev challenger, rate limited */
+  publicDevChallenges: { enabled: boolean; minIntervalMs: number; maxPerProcess: number };
   links: { deck: string | null; repo: string; emberAddress: string | null };
 }
 
@@ -65,6 +69,12 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     offerSats: int(env, 'OFFER_SATS', 3000n),
     escrowSats: int(env, 'ESCROW_SATS', 3000n),
     verifierTickMs: Number(env.VERIFIER_TICK_MS ?? 20_000),
+    autoOffers: Number(env.AUTO_OFFERS ?? (network === 'mocknet' ? 3 : 1)),
+    publicDevChallenges: {
+      enabled: network === 'mocknet' && env.MOCKNET_PUBLIC_CHALLENGES === '1',
+      minIntervalMs: Number(env.MOCKNET_CHALLENGE_INTERVAL_MS ?? 15_000),
+      maxPerProcess: Number(env.MOCKNET_CHALLENGE_CAP ?? 200),
+    },
     links: {
       deck: env.NEXT_PUBLIC_DECK_URL || null,
       repo: env.NEXT_PUBLIC_REPO_URL || 'https://github.com/0xileri/Sellacalida',

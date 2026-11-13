@@ -9,7 +9,7 @@ import { loadConfig } from '@/lib/server/config';
 import { buildContextFromEnv, type ServerContext } from '@/lib/server/context';
 import {
   UserError, agentView, cancelOffer, challengeView, confirmAccept, createOffer, devSimulateAccept, prepareChallenge,
-  afterAccept, refreshOffers, statsView, verifierTick,
+  afterAccept, ensureOpenOffers, refreshOffers, statsView, verifierTick,
 } from '@/lib/server/service';
 import type { ChallengeSpec } from '@/lib/templates/public';
 import { reproduceEvidence, type Evidence } from '@/lib/verifier/evidence';
@@ -67,6 +67,25 @@ describe('offers', () => {
     await cancelOffer(ctx, o.id);
     expect(ctx.db.offer(o.id)?.status).toBe('cancelled');
     await expect(prepareChallenge(ctx, { offerId: o.id, spec: MATH, challengerAddress: ctx.devChallenger!.address })).rejects.toThrow(/cancelled/);
+  });
+});
+
+describe('auto bonds', () => {
+  it('keeps AUTO_OFFERS bonds open and tops up after one is taken', async () => {
+    const ctx = buildContextFromEnv({ NETWORK: 'mocknet', AUTO_OFFERS: '2' });
+    ctx.llm = stubLlm('-10');
+    expect(await ensureOpenOffers(ctx)).toBe(2);
+    expect(await ensureOpenOffers(ctx)).toBe(0);
+    const [first] = ctx.db.offers;
+    await devSimulateAccept(ctx, first.id, MATH);
+    expect(await ensureOpenOffers(ctx)).toBe(1);
+    expect(ctx.db.offers.filter((o) => o.status === 'open')).toHaveLength(2);
+  });
+
+  it('does nothing without an agent key or when set to 0', async () => {
+    const ctx = buildContextFromEnv({ NETWORK: 'mocknet', AUTO_OFFERS: '0' });
+    expect(await ensureOpenOffers(ctx)).toBe(0);
+    expect(ctx.db.offers).toHaveLength(0);
   });
 });
 
@@ -192,5 +211,23 @@ describe('agent + verifier', () => {
     await buildCancel({ provider: ctx.provider, offer: o.params, offerContract: contract, offerUtxo: u, agentPk: ctx.agentKey!.pk, agentSig: ctx.agentKey!.template }).send();
     await refreshOffers(ctx);
     expect(ctx.db.offer(o.id)?.status).toBe('spent');
+  });
+});
+
+describe('one server context per process', () => {
+  it('lives on globalThis, so the verifier loop and the routes share it across Next.js bundles', async () => {
+    const { getServerContext, setServerContext } = await import('@/lib/server/context');
+    const ctx = buildContextFromEnv({ NETWORK: 'mocknet' });
+    setServerContext(ctx);
+    expect((globalThis as { __sellacalidaServerContext?: unknown }).__sellacalidaServerContext).toBe(ctx);
+    expect(getServerContext()).toBe(ctx);
+    setServerContext(null);
+  });
+
+  it('runtime guards are per context, not per module copy', async () => {
+    const a = buildContextFromEnv({ NETWORK: 'mocknet' });
+    const b = buildContextFromEnv({ NETWORK: 'mocknet' });
+    a.runtime.ticking = true;
+    expect(b.runtime.ticking).toBe(false);
   });
 });

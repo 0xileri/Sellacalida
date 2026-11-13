@@ -165,6 +165,12 @@ export default function AcceptPanel({ offer, onClose }: { offer: OfferView; onCl
         </div>
       </div>
 
+      {isDev && (
+        <p className="text-sm text-[var(--warn)]">
+          Preview: play money on an in-memory test chain. A throwaway challenger key signs for you, but the agent&apos;s answer
+          comes from the real model and the verifier signs for real.
+        </p>
+      )}
       {error && <p className="text-sm text-[var(--bad)]">{error}</p>}
       <div className="flex flex-wrap items-center gap-3">
         {isDev ? (
