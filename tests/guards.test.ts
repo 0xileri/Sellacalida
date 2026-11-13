@@ -75,6 +75,8 @@ describe('compiled artifacts are up to date (run `npm run compile`)', () => {
       expect(committed.bytecode).toBe(fresh.bytecode);
       expect(committed.abi).toEqual(fresh.abi);
       expect(committed.constructorInputs).toEqual(fresh.constructorInputs);
+      const twin = readFileSync(join(root, `contracts/artifacts/${name}.ts`), 'utf8');
+      expect(twin).toContain(JSON.stringify(committed.bytecode));
     });
   }
 });

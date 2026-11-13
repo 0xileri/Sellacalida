@@ -425,9 +425,11 @@ describe('SellacalidaOffer: category byte order (spec section 2 caveat)', () => 
   it('an offer built with the explorer-order category (not swapped) cannot be accepted', async () => {
     const provider = newProvider();
     const offer = baseOffer();
-    const wrongArgs = [...offerSdkArgs(offer)];
-    wrongArgs[4] = Uint8Array.from(Buffer.from(CATEGORY, 'hex')); // explorer order baked in: wrong
-    const wrongOffer = new Contract(offerArtifact, wrongArgs, { provider, contractType: 'p2sh32' });
+    const a = offerSdkArgs(offer);
+    const explorerOrder = Uint8Array.from(Buffer.from(CATEGORY, 'hex')); // explorer order baked in: wrong
+    const wrongOffer = new Contract(offerArtifact, [a[0], a[1], a[2], a[3], explorerOrder, a[5], a[6], a[7], a[8]], {
+      provider, contractType: 'p2sh32',
+    });
     const offerUtxo = addUtxo(provider, wrongOffer.lockingBytecode, 5000n, { category: CATEGORY, amount: 100n });
     const terms = baseTerms();
     const tokenUtxo = addUtxo(provider, challenger.lockHex, 10_000n, { category: CATEGORY, amount: 20n });

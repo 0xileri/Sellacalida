@@ -2,8 +2,8 @@
 // Amounts are bigint base units everywhere. Categories are explorer-order hex at the edges and
 // converted to VM order only when they become contract arguments.
 import { Contract, type NetworkProvider } from 'cashscript';
-import offerArtifact from '../contracts/artifacts/SellacalidaOffer.json';
-import escrowArtifact from '../contracts/artifacts/SellacalidaEscrow.json';
+import offerArtifact from '../contracts/artifacts/SellacalidaOffer';
+import escrowArtifact from '../contracts/artifacts/SellacalidaEscrow';
 import { MAX_HEIGHT, MIN_VERIFIER_GRACE, NETWORK_IDS, type SellacalidaNetwork } from './constants';
 import { escrowBody, escrowSdkArgs, type EscrowArgs } from './encodeRedeemScript';
 import { toContractCategory } from './tokenCategory';

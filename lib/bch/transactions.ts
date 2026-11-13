@@ -10,10 +10,10 @@ import {
   type NetworkProvider,
   type SignatureTemplate,
   type Unlocker,
-  type Utxo,
   type SpendableUtxo,
-  type TransactionBuilderOptions,
 } from 'cashscript';
+
+type TransactionBuilderOptions = ConstructorParameters<typeof TransactionBuilder>[0];
 import { MIN_OUTPUT_SATS } from '../constants';
 import type { ChallengeTerms, OfferParams } from '../contracts';
 import { buildEscrowRedeemScript, escrowLockingBytecode, type EscrowArgs } from '../encodeRedeemScript';
@@ -34,15 +34,11 @@ export function p2pkhLockingBytecode(pkh: Uint8Array): Uint8Array {
   return Uint8Array.from([0x76, 0xa9, 0x14, ...pkh, 0x88, 0xac]);
 }
 
-function sumSats(utxos: Utxo[]): bigint {
-  return utxos.reduce((acc, u) => acc + u.satoshis, 0n);
-}
-
 /**
  * Two-pass fee: build with a provisional fee, measure, then rebuild with the real fee.
  * `placeholders` adds the bytes a wallet will insert into placeholder inputs.
  */
-function withFee(
+export function withFee(
   make: (fee: bigint) => TransactionBuilder,
   placeholders: number,
   feeRate: number,

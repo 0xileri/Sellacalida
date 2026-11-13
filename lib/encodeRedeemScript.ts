@@ -15,7 +15,7 @@ import {
   hexToBin,
 } from '@bitauth/libauth';
 import { utils } from 'cashscript';
-import escrowArtifact from '../contracts/artifacts/SellacalidaEscrow.json';
+import escrowArtifact from '../contracts/artifacts/SellacalidaEscrow';
 
 export interface EscrowArgs {
   agentPkh: Uint8Array; // 20
