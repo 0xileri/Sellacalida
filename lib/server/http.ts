@@ -1,5 +1,6 @@
 // Small helpers shared by the route handlers.
 import { timingSafeEqual } from 'node:crypto';
+import { connection } from 'next/server';
 import { getServerContext, type ServerContext } from './context';
 import { ensureAgent, UserError } from './service';
 
@@ -21,6 +22,15 @@ export function json(data: unknown, status = 200, headers: Record<string, string
 
 /** Run a handler, turning UserError into its status and anything else into a 500 with a message. */
 export async function handle(fn: () => Promise<Response> | Response): Promise<Response> {
+  // Cache Components prerenders GET handlers that touch no request data, which would freeze live
+  // state (offers, stats) at build time. connection() makes every API response request-time.
+  // Its prerender bailout must propagate; only "no Next request at all" (direct calls in tests)
+  // is tolerated.
+  try {
+    await connection();
+  } catch (e) {
+    if (!(e instanceof Error && e.message.includes('called outside a request scope'))) throw e;
+  }
   try {
     return await fn();
   } catch (e) {

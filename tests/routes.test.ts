@@ -85,6 +85,30 @@ describe('public routes', () => {
   });
 });
 
+describe('every API route is request-time', () => {
+  it('each route handler goes through handle(), which calls connection() so nothing is prerendered', async () => {
+    const { readdirSync, readFileSync, statSync } = await import('node:fs');
+    const { join } = await import('node:path');
+    const files: string[] = [];
+    const walk = (d: string) => {
+      for (const f of readdirSync(d)) {
+        const p = join(d, f);
+        if (statSync(p).isDirectory()) walk(p);
+        else if (f === 'route.ts') files.push(p);
+      }
+    };
+    walk(join(process.cwd(), 'app/api'));
+    expect(files.length).toBeGreaterThan(10);
+    for (const f of files) {
+      const src = readFileSync(f, 'utf8');
+      const handlers = src.match(/export async function (GET|POST|PUT|PATCH|DELETE)\b/g) ?? [];
+      const wrapped = src.match(/return handle\(/g) ?? [];
+      expect({ file: f, wrapped: wrapped.length }).toEqual({ file: f, wrapped: handlers.length });
+    }
+    expect(readFileSync(join(process.cwd(), 'lib/server/http.ts'), 'utf8')).toContain('await connection()');
+  });
+});
+
 describe('public play challenges on a mocknet preview', () => {
   it('open to anyone, one at a time, capped per process; admin-only when not enabled', async () => {
     resetPublicDevLimit();
