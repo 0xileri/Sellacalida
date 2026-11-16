@@ -46,4 +46,6 @@ On chipnet, challengers accept with their own wallet through WizardConnect; ther
 
 ## Mainnet
 
-Only after chipnet is green (spec, cut list). Same as chipnet with `NETWORK=mainnet`, no `TOKEN_CATEGORY` (forced to PUSD mainnet-v1), tiny bonds, and new keys.
+The spec wants chipnet green first. No chipnet faucet paid out, so on 16 Nov the contracts are proven on mainnet instead, with the capped runner (`npm run mainnet -- ...`, see `SPIKE.md`). Deploy the app on mainnet only after that run is green.
+
+Same as chipnet with `NETWORK=mainnet`, no `TOKEN_CATEGORY` (forced to PUSD mainnet-v1), tiny bonds, and new keys: a fresh `AGENT_WIF` holding a few cents of PUSD and BCH, and a fresh `VERIFIER_PRIVATE_KEY` that is not one of the runner's throwaway keys. Add the Railway volume at `/app/data` first, because mainnet escrows must survive a restart.

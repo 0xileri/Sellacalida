@@ -72,7 +72,8 @@ const defaults = {
   },
   mainnet: {
     category: PUSD_CATEGORY_MAINNET,
-    verifierPk: process.env.NEXT_PUBLIC_VERIFIER_PK ?? '',
+    // from "npm run mainnet -- keygen", or the deployed app's verifier
+    verifierPk: process.env.NEXT_PUBLIC_MAINNET_VERIFIER_PK ?? process.env.NEXT_PUBLIC_VERIFIER_PK ?? '',
   },
 };
 
@@ -104,6 +105,9 @@ export default function ConnectSpike() {
     setNetwork(next);
     setCategory(defaults[next].category);
     setVerifierPk(defaults[next].verifierPk);
+    // real PUSD on mainnet: cents, not dollars (spec section 8)
+    setBond(next === 'mainnet' ? '5' : '100');
+    setFee(next === 'mainnet' ? '1' : '20');
     setAddresses([]);
     setUtxos([]);
     setHeight(null);
@@ -319,7 +323,7 @@ export default function ConnectSpike() {
           <input className="field font-mono" value={category} onChange={(e) => setCategory(e.target.value.trim().toLowerCase())} />
         </label>
         <label className="grid gap-1">
-          Verifier pubkey (33-byte hex, from <code>npm run chipnet -- keygen</code>)
+          Verifier pubkey (33-byte hex, from <code>npm run {network === 'mainnet' ? 'mainnet' : 'chipnet'} -- keygen</code>)
           <input className="field font-mono" value={verifierPk} onChange={(e) => setVerifierPk(e.target.value.trim().toLowerCase())} />
         </label>
       </section>
