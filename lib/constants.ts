@@ -16,6 +16,20 @@ export const MAX_HEIGHT = 500_000_000;
 /** Minimum verifierGraceBlocks an agent may commit (about 3 hours of blocks). */
 export const MIN_VERIFIER_GRACE = 18;
 
+/**
+ * Mainnet app caps (spec sections 8 and 9: tiny bonds, a throwaway agent wallet with a tiny cap,
+ * never large public stakes). The app refuses to publish a bond above these.
+ */
+export const MAINNET_MAX_BOND = 100n; // 1.00 PUSD per bond, and per fee
+export const MAINNET_AGENT_MAX_SATS = 1_000_000n;
+export const MAINNET_AGENT_MAX_TOKENS = 2_000n; // 20.00 PUSD
+
+/**
+ * Mainnet passed this height in 2025; chipnet is far below it. An Electrum server on the wrong
+ * network shows up as a height on the wrong side of this line.
+ */
+export const MAINNET_MIN_HEIGHT = 800_000;
+
 export const NETWORK_IDS = {
   mainnet: 0x00,
   chipnet: 0x01,

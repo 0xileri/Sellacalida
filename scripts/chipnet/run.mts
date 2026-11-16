@@ -23,7 +23,7 @@ import {
   binToHex, cashAddressToLockingBytecode, decodePrivateKeyWif, encodePrivateKeyWif, generatePrivateKey, hash160, secp256k1,
 } from '@bitauth/libauth';
 import { MockNetworkProvider, SignatureTemplate, type NetworkProvider } from 'cashscript';
-import { makeProvider } from '../../lib/bch/network';
+import { assertChainMatchesNetwork, makeProvider } from '../../lib/bch/network';
 import { fromJson, toJson } from '../../lib/serialize';
 import { networkPrefix, pkhToCashAddress } from '../../lib/bch/address';
 import { p2pkhLockingBytecode } from '../../lib/bch/transactions';
@@ -199,6 +199,7 @@ async function main() {
     raw.setBlockHeight(300_000);
     seedMocknet(raw, keys.AGENT);
   }
+  await assertChainMatchesNetwork(raw, network);
   const provider = mainnet && !assumeYes ? confirmingProvider(raw) : raw;
 
   const ctx: FlowContext = {

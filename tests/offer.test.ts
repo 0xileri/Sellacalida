@@ -409,6 +409,23 @@ describe('SellacalidaOffer.accept: outputs', () => {
     await expectRequire(b, 'require(tx.outputs[1].value >= MIN_OUTPUT_SATS);');
   });
 
+  it('rejects an accept with only the escrow output (output 1 dropped)', async () => {
+    const { input } = acceptSetup();
+    const b = buildAccept({ ...input, tamper: (t) => { t.outputs.splice(1, 1); } });
+    await expectRequire(b, 'require(tx.outputs.length == 2);');
+  });
+
+  it('an NFT-capable change output is impossible too: the change path cannot mint an NFT', async () => {
+    const { offer, input } = acceptSetup({ challengerTokens: 55n });
+    const b = buildAccept({
+      ...input,
+      tamper: (t) => {
+        t.outputs[1].token = { category: offer.tokenCategory, amount: 35n, nft: { capability: 'none', commitment: '' } };
+      },
+    });
+    await expect(b.send()).rejects.toThrow(/creates an immutable token for a category without a matching minting token/);
+  });
+
   it('an NFT-capable escrow output is impossible: all inputs are fungible-only, so the VM rejects it', async () => {
     const { offer, input } = acceptSetup();
     const b = buildAccept({
@@ -417,7 +434,7 @@ describe('SellacalidaOffer.accept: outputs', () => {
         t.outputs[0].token = { category: offer.tokenCategory, amount: 120n, nft: { capability: 'none', commitment: '' } };
       },
     });
-    await expect(b.send()).rejects.toThrow();
+    await expect(b.send()).rejects.toThrow(/creates an immutable token for a category without a matching minting token/);
   });
 });
 
