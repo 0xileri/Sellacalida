@@ -1,8 +1,9 @@
-// Chipnet (and mocknet dry-run) flows for the milestone 1 gate: genesis of a fungible test token,
-// then cancel, accept exact + settle PASS, accept change + settle FAIL, NORESPONSE, and timeout.
-// Every scenario funds itself from the agent key in one transaction. Signing here uses local
-// throwaway keys (SignatureTemplate); the WizardConnect wallet path is exercised by /connect.
-import { binToHex, hexToBin, sha256, utf8ToBin } from '@bitauth/libauth';
+// Chipnet, mainnet and mocknet dry-run flows for the milestone 1 gate: genesis of a fungible test
+// token (chipnet / mocknet only), then cancel, accept exact + settle PASS, accept change + settle
+// FAIL, NORESPONSE, and timeout. Every scenario funds itself from the agent key in one transaction.
+// Signing here uses local throwaway keys (SignatureTemplate); the WizardConnect wallet path is
+// exercised by /connect. On mainnet the bond token is PUSD and amounts are cents (MAINNET_AMOUNTS).
+import { binToHex, decodeTransaction, hexToBin, sha256, utf8ToBin } from '@bitauth/libauth';
 import {
   MockNetworkProvider,
   TransactionBuilder,
@@ -10,7 +11,8 @@ import {
   type SignatureTemplate,
   type SpendableUtxo,
 } from 'cashscript';
-import { MIN_OUTPUT_SATS, type SellacalidaNetwork, type Verdict } from '../../lib/constants';
+import { MIN_OUTPUT_SATS, PUSD_CATEGORY_MAINNET, type SellacalidaNetwork, type Verdict } from '../../lib/constants';
+import { lockingBytecodeToAddress } from '../../lib/bch/address';
 import { escrowArgsFor, makeEscrowContract, makeOfferContract, type ChallengeTerms, type OfferParams } from '../../lib/contracts';
 import { buildAccept, buildCancel, buildSettle, buildTimeout, p2pkhLockingBytecode, withFee } from '../../lib/bch/transactions';
 import { buildAttestation, sha256Utf8, signAttestation } from '../../lib/attestation';
@@ -38,6 +40,16 @@ export interface FlowContext {
   /** resolves true once the chain height is >= h; false means "not yet, come back later" */
   reachHeight: (h: number) => Promise<boolean>;
   results: StepResult[];
+  /** bond / fee sizes; CHIPNET_AMOUNTS when omitted */
+  amounts?: Amounts;
+}
+
+/** Token base units per scenario. The change amounts exercise the accept change path. */
+export interface Amounts {
+  bond: bigint;
+  fee: bigint;
+  failChange: bigint;
+  timeoutChange: bigint;
 }
 
 export interface StepResult {
@@ -55,6 +67,19 @@ export const FEE_WALLET_SATS = 3000n;
 export const TOKEN_SUPPLY = 1_000_000n;
 export const BOND = 100n; // 1.00 in a 2-decimal token
 export const FEE = 20n; // 0.20
+export const CHIPNET_AMOUNTS: Amounts = { bond: BOND, fee: FEE, failChange: 35n, timeoutChange: 5n };
+/** Mainnet uses real PUSD: a 0.05 bond and a 0.01 fee. A full run moves about 0.35 PUSD. */
+export const MAINNET_AMOUNTS: Amounts = { bond: 5n, fee: 1n, failChange: 2n, timeoutChange: 1n };
+
+// Mainnet hot-wallet caps for the runner: the throwaway keys live in a plaintext .env.local, so the
+// runner refuses to spend from an agent holding more than this. Move the excess out with "sweep".
+export const MAINNET_MAX_BOND = 10n;
+export const MAINNET_MAX_AGENT_SATS = 250_000n;
+export const MAINNET_MAX_AGENT_TOKENS = 1_000n; // 10.00 PUSD
+
+function amountsOf(ctx: FlowContext): Amounts {
+  return ctx.amounts ?? CHIPNET_AMOUNTS;
+}
 
 function record(ctx: FlowContext, scenario: string, step: string, txid: string, note?: string) {
   const r = { scenario, step, txid, url: explorerTxUrl(ctx.network, txid), ...(note ? { note } : {}) };
@@ -82,6 +107,7 @@ function requireCategory(ctx: FlowContext): string {
 
 /** Mint TOKEN_SUPPLY of a new fungible category to the agent. Returns the explorer-order category. */
 export async function genesis(ctx: FlowContext): Promise<string> {
+  if (ctx.network === 'mainnet') throw new Error('mainnet bonds are PUSD only: no test token is minted on mainnet');
   let utxos = (await utxosOf(ctx, ctx.agent)).filter((u) => !u.token);
   let vout0 = utxos.find((u) => u.vout === 0 && u.satoshis >= 3000n);
   if (!vout0) {
@@ -187,11 +213,15 @@ async function fund(
 // ---------------------------------------------------------------------------------------------
 
 function offerParams(ctx: FlowContext, short = false): OfferParams {
+  const a = amountsOf(ctx);
+  if (ctx.network === 'mainnet' && (a.bond > MAINNET_MAX_BOND || a.fee > MAINNET_MAX_BOND)) {
+    throw new Error(`mainnet bond and fee are capped at ${MAINNET_MAX_BOND} base units`);
+  }
   return {
     agentPkh: ctx.agent.pkh,
     verifierPk: ctx.verifier.pk,
-    bondAmount: BOND,
-    feeAmount: FEE,
+    bondAmount: a.bond,
+    feeAmount: a.fee,
     tokenCategory: requireCategory(ctx),
     network: ctx.network,
     // short windows make NORESPONSE (1 block) and timeout (19 blocks) practical on chipnet
@@ -279,20 +309,20 @@ async function settleStep(
 
 export async function scenarioPass(ctx: FlowContext) {
   const offer = offerParams(ctx);
-  const a = await acceptStep(ctx, 'pass', offer, FEE, 100);
+  const a = await acceptStep(ctx, 'pass', offer, offer.feeAmount, 100);
   await settleStep(ctx, 'pass', offer, a.terms, a.escrowTxid, 'PASS');
 }
 
 export async function scenarioFail(ctx: FlowContext) {
   const offer = offerParams(ctx);
-  const a = await acceptStep(ctx, 'fail', offer, FEE + 35n, 100, true);
+  const a = await acceptStep(ctx, 'fail', offer, offer.feeAmount + amountsOf(ctx).failChange, 100, true);
   await settleStep(ctx, 'fail', offer, a.terms, a.escrowTxid, 'FAIL', { feeWalletUtxo: a.feeWalletUtxo });
 }
 
 /** Accept with a short window and return what must be finished once the height is reached. */
 export async function scenarioStartShort(ctx: FlowContext, kind: 'noresponse' | 'timeout'): Promise<PendingEscrow> {
   const offer = offerParams(ctx, true);
-  const a = await acceptStep(ctx, kind, offer, kind === 'timeout' ? FEE + 5n : FEE, 19);
+  const a = await acceptStep(ctx, kind, offer, offer.feeAmount + (kind === 'timeout' ? amountsOf(ctx).timeoutChange : 0n), 19);
   const readyAt = kind === 'noresponse'
     ? Number(a.terms.expiryHeight - offer.verifierGraceBlocks)
     : Number(a.terms.expiryHeight);
@@ -320,6 +350,81 @@ export async function finishPending(ctx: FlowContext, p: PendingEscrow): Promise
   });
   record(ctx, p.scenario, 'timeout refund', (await b.send()).txid);
   return true;
+}
+
+// ---------------------------------------------------------------------------------------------
+// mainnet safety: hot-wallet caps, a readable summary before each broadcast, and a sweep
+// ---------------------------------------------------------------------------------------------
+
+/** Throws unless the agent hot wallet is within the mainnet caps. Returns its balances. */
+export async function checkMainnetCaps(ctx: FlowContext) {
+  const utxos = await utxosOf(ctx, ctx.agent);
+  const sats = utxos.reduce((a, u) => a + u.satoshis, 0n);
+  const tokens = utxos.filter((u) => u.token?.category === ctx.category).reduce((a, u) => a + u.token!.amount, 0n);
+  if (sats > MAINNET_MAX_AGENT_SATS || tokens > MAINNET_MAX_AGENT_TOKENS) {
+    throw new Error(
+      `the agent holds ${sats} sats and ${tokens} token base units, over the mainnet runner caps ` +
+        `(${MAINNET_MAX_AGENT_SATS} sats, ${MAINNET_MAX_AGENT_TOKENS} base units). Keep this throwaway key tiny: ` +
+        'move the excess out with "sweep <your address>" and fund it again with less.',
+    );
+  }
+  return { sats, tokens };
+}
+
+/** One line per output, for the y/N prompt before a mainnet broadcast. */
+export function describeTx(hex: string, network: SellacalidaNetwork): string {
+  const tx = decodeTransaction(hexToBin(hex));
+  if (typeof tx === 'string') return `  (could not decode: ${tx})`;
+  const lines = tx.outputs.map((o, i) => {
+    let to: string;
+    try {
+      to = lockingBytecodeToAddress(o.lockingBytecode, network);
+    } catch {
+      to = `script ${binToHex(o.lockingBytecode).slice(0, 24)}...`;
+    }
+    let token = '';
+    if (o.token) {
+      const cat = binToHex(o.token.category);
+      const name = cat === PUSD_CATEGORY_MAINNET ? 'PUSD' : `token ${cat.slice(0, 8)}...`;
+      token = ` + ${o.token.amount} ${name} base units${o.token.nft ? ' + NFT' : ''}`;
+    }
+    return `  out ${i}: ${o.valueSatoshis} sats${token} -> ${to}`;
+  });
+  return [`  ${hex.length / 2} bytes, ${tx.inputs.length} inputs, ${tx.outputs.length} outputs`, ...lines].join('\n');
+}
+
+/**
+ * Send everything the given keys hold (BCH and tokens) to one locking bytecode, for example your own
+ * wallet at the end of a mainnet run. Escrows that are still open are not swept; finish them first.
+ */
+export async function sweep(ctx: FlowContext, keys: Key[], toLock: Uint8Array): Promise<string | null> {
+  const ins: { u: SpendableUtxo; k: Key }[] = [];
+  for (const k of keys) for (const u of await utxosOf(ctx, k)) ins.push({ u, k });
+  if (ins.length === 0) {
+    ctx.log('  nothing to sweep');
+    return null;
+  }
+  const fungible = new Map<string, bigint>();
+  for (const { u } of ins) {
+    if (u.token && !u.token.nft) fungible.set(u.token.category, (fungible.get(u.token.category) ?? 0n) + u.token.amount);
+  }
+  const nfts = ins.filter((x) => x.u.token?.nft);
+  const inSats = ins.reduce((a, x) => a + x.u.satoshis, 0n);
+  const fixedOut = BigInt(fungible.size + nfts.length) * MIN_OUTPUT_SATS;
+  const { builder, fee } = withFee((f) => {
+    const b = new TransactionBuilder({ provider: ctx.provider });
+    for (const { u, k } of ins) b.addInput(u, k.template.unlockP2PKH());
+    for (const [category, amount] of fungible) b.addOutput({ to: toLock, amount: MIN_OUTPUT_SATS, token: { category, amount } });
+    for (const { u } of nfts) b.addOutput({ to: toLock, amount: MIN_OUTPUT_SATS, token: u.token! });
+    b.addOutput({ to: toLock, amount: inSats - fixedOut - f });
+    return b;
+  }, 0, 1.1);
+  if (inSats - fixedOut - fee < MIN_OUTPUT_SATS) {
+    throw new Error(`not enough BCH to sweep: ${inSats} sats in, ${fixedOut} needed for token outputs plus a ${fee} sat fee`);
+  }
+  const txid = (await builder.send()).txid;
+  record(ctx, 'sweep', 'sweep to your wallet', txid, `${ins.length} inputs`);
+  return txid;
 }
 
 // ---------------------------------------------------------------------------------------------

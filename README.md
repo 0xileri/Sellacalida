@@ -19,7 +19,7 @@ What the verifier cannot do: send the funds anywhere except the agent or the cha
 Milestone 1 (contracts + wallet spike) is in progress:
 
 - `contracts/SellacalidaOffer.cash`, `contracts/SellacalidaEscrow.cash`: written, compiled with cashc 0.14.0, green on mocknet.
-- Chipnet runner and `/connect` wallet spike page: built and dry-run on mocknet; real chipnet and real-wallet runs are pending (see `SPIKE.md`).
+- Contract runner and `/connect` wallet spike page: built and dry-run on mocknet. No chipnet faucet paid out, so the real-chain run is a capped mainnet run (`npm run mainnet`, cent-sized PUSD bonds, a prompt before every broadcast); it and the real-wallet run are pending (see `SPIKE.md`).
 - Challenge templates, checkers, the verifier core (decide, sign, settle, timeout), the write-once answer store and reproducible evidence: built and tested on mocknet. Not running live anywhere yet.
 - Agent runner: calls a real LLM (default `anthropic/claude-sonnet-5.5`) through Orbio's OpenAI-compatible gateway (any compatible base URL works), parses the reply strictly, and commits it write-once with the model id that actually served it. For BCH templates it gets one tool, `get_transaction`, which returns outputs decoded from raw hex verified against the txid; every call is recorded in the commitment and the evidence. `npm run agent:try` asks it one challenge.
 - App: pages `/`, `/arena`, `/challenge/[id]` and `/agent/[id]`, a JSON API, and an in-process verifier loop (started from `instrumentation.ts`). Tested end to end on mocknet with the live agent through the real UI; not yet run against chipnet or a real wallet.
@@ -46,7 +46,7 @@ lib/wire.ts                JSON shapes shared by the API and the browser
 app/                       pages: / , /arena, /challenge/[id], /agent/[id]; /connect is the wallet spike
 app/api/                   route handlers (public + /api/admin/*)
 instrumentation.ts         starts the verifier loop once per Node server
-scripts/chipnet/           chipnet runner (keygen, genesis, every contract path)
+scripts/chipnet/           contract runner for chipnet and capped mainnet (keygen, every contract path, sweep)
 tests/                     vitest suites (mocknet)
 ```
 
@@ -58,6 +58,7 @@ npm test                 # 377 tests, MockNetworkProvider with vmTarget BCH_2026
 npm run compile          # recompile contracts/*.cash (tests fail if artifacts are stale)
 npm run dev              # http://localhost:3000, wallet spike at /connect
 npm run chipnet -- all --network mocknet   # dry-run the chipnet flows in memory
+npm run mainnet -- status                  # capped mainnet run with real PUSD (see SPIKE.md)
 npm run agent:try        # ask the live agent one challenge (needs LLM_API_KEY, LLM_MODEL_ID)
 ```
 
@@ -137,7 +138,7 @@ This re-runs the checker on the cached raw transaction (after checking it hashes
 
 ## Secrets
 
-`.env.local` only, never committed (see `.env.example` for names). The chipnet runner writes throwaway chipnet keys there. No private keys, WIFs or API keys belong in the repo, the client bundle or commit history.
+`.env.local` only, never committed (see `.env.example` for names). The runner writes throwaway `CHIPNET_*` and `MAINNET_*` keys there, kept apart per network. No private keys, WIFs or API keys belong in the repo, the client bundle or commit history.
 
 ## License
 

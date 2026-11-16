@@ -1,5 +1,5 @@
-// Chipnet runner for the milestone 1 gate. Run on a machine with normal internet access
-// (Electrum uses WSS on port 50004).
+// Contract runner for the milestone 1 gate: chipnet, a capped mainnet run, or a mocknet dry run.
+// Run on a machine with normal internet access (Electrum uses WSS on port 50004).
 //
 //   npm run chipnet -- keygen            create throwaway chipnet keys in .env.local, print the faucet address
 //   npm run chipnet -- status            balances and height
@@ -7,38 +7,60 @@
 //   npm run chipnet -- all               cancel, pass, fail, then start noresponse + timeout
 //   npm run chipnet -- cancel|pass|fail|noresponse|timeout
 //   npm run chipnet -- pending [--wait]  finish NORESPONSE (after 1 block) and timeout (after 19 blocks)
+//   npm run chipnet -- sweep <address>   send everything the throwaway keys hold to your own wallet
+//
+//   npm run mainnet -- <same commands>   the same on mainnet with real PUSD (no genesis): bonds of
+//                                        0.05 PUSD, hot-wallet caps, and a y/N prompt before every
+//                                        broadcast (add --yes to skip the prompts)
 //
 //   add --network mocknet to dry-run every step in memory (no keys, no internet).
 //
-// Writes data/chipnet-state.json (pending escrows) and data/chipnet-results.{json,md} (txids for SPIKE.md).
+// Writes data/<network>-state.json (pending escrows) and data/<network>-results.{json,md} (txids for SPIKE.md).
 import { existsSync, mkdirSync, readFileSync, writeFileSync, appendFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { createInterface } from 'node:readline/promises';
 import {
-  binToHex, decodePrivateKeyWif, encodePrivateKeyWif, generatePrivateKey, hash160, secp256k1,
+  binToHex, cashAddressToLockingBytecode, decodePrivateKeyWif, encodePrivateKeyWif, generatePrivateKey, hash160, secp256k1,
 } from '@bitauth/libauth';
-import { MockNetworkProvider, SignatureTemplate } from 'cashscript';
+import { MockNetworkProvider, SignatureTemplate, type NetworkProvider } from 'cashscript';
 import { makeProvider } from '../../lib/bch/network';
 import { fromJson, toJson } from '../../lib/serialize';
-import { pkhToCashAddress } from '../../lib/bch/address';
+import { networkPrefix, pkhToCashAddress } from '../../lib/bch/address';
 import { p2pkhLockingBytecode } from '../../lib/bch/transactions';
-import type { SellacalidaNetwork } from '../../lib/constants';
+import { PUSD_CATEGORY_MAINNET, type SellacalidaNetwork } from '../../lib/constants';
 import {
-  finishPending, genesis, scenarioCancel, scenarioFail, scenarioPass, scenarioStartShort, seedMocknet,
+  CHIPNET_AMOUNTS, MAINNET_AMOUNTS, checkMainnetCaps, describeTx, finishPending, genesis, scenarioCancel,
+  scenarioFail, scenarioPass, scenarioStartShort, seedMocknet, sweep,
   type FlowContext, type Key, type PendingEscrow, type StepResult,
 } from './flows';
+
+// ---- arguments -----------------------------------------------------------------------------------
+
+const positional: string[] = [];
+const flags = new Set<string>();
+let network: SellacalidaNetwork = 'chipnet';
+{
+  const argv = process.argv.slice(2);
+  for (let i = 0; i < argv.length; i++) {
+    if (argv[i] === '--network') network = argv[++i] as SellacalidaNetwork;
+    else if (argv[i].startsWith('--')) flags.add(argv[i]);
+    else positional.push(argv[i]);
+  }
+}
+if (!['chipnet', 'mainnet', 'mocknet'].includes(network)) throw new Error(`unknown network "${network}"`);
+const command = positional[0] ?? 'status';
+const wait = flags.has('--wait');
+const assumeYes = flags.has('--yes');
+const mainnet = network === 'mainnet';
 
 const ROOT = process.cwd();
 const ENV_FILE = join(ROOT, '.env.local');
 const DATA = join(ROOT, 'data');
-const STATE_FILE = join(DATA, 'chipnet-state.json');
-const RESULTS_JSON = join(DATA, 'chipnet-results.json');
-const RESULTS_MD = join(DATA, 'chipnet-results.md');
-
-const args = process.argv.slice(2);
-const command = args.find((a) => !a.startsWith('--')) ?? 'status';
-const network: SellacalidaNetwork = args.includes('--network') ? (args[args.indexOf('--network') + 1] as SellacalidaNetwork) : 'chipnet';
-const wait = args.includes('--wait');
-if (network === 'mainnet') throw new Error('this runner is chipnet / mocknet only; mainnet comes after chipnet is green');
+const STATE_FILE = join(DATA, `${network}-state.json`);
+const RESULTS_JSON = join(DATA, `${network}-results.json`);
+const RESULTS_MD = join(DATA, `${network}-results.md`);
+/** chipnet and mainnet keys never mix: each network has its own CHIPNET_* / MAINNET_* entries */
+const ENV_PREFIX = mainnet ? 'MAINNET' : 'CHIPNET';
 
 // ---- env + keys --------------------------------------------------------------------------------
 
@@ -78,10 +100,12 @@ function loadKeys(): Record<(typeof ROLES)[number], Key> {
   const env = loadEnv();
   const out = {} as Record<(typeof ROLES)[number], Key>;
   for (const r of ROLES) {
-    const wif = env[`CHIPNET_${r}_WIF`];
-    if (!wif) throw new Error(`missing CHIPNET_${r}_WIF in .env.local: run "npm run chipnet -- keygen" first`);
+    const name = `${ENV_PREFIX}_${r}_WIF`;
+    const wif = env[name];
+    if (!wif) throw new Error(`missing ${name} in .env.local: run "npm run ${mainnet ? 'mainnet' : 'chipnet'} -- keygen" first`);
     const d = decodePrivateKeyWif(wif);
-    if (typeof d === 'string') throw new Error(`CHIPNET_${r}_WIF: ${d}`);
+    if (typeof d === 'string') throw new Error(`${name}: ${d}`);
+    if (d.type !== (mainnet ? 'mainnet' : 'testnet')) throw new Error(`${name} is a ${d.type} key; this is a ${network} run`);
     out[r] = keyFromPriv(r, d.privateKey);
   }
   return out;
@@ -110,49 +134,90 @@ function saveResults(results: StepResult[]) {
   writeFileSync(RESULTS_MD, ['| scenario | step | tx | note |', '| --- | --- | --- | --- |', ...rows].join('\n') + '\n');
 }
 
+// ---- mainnet: ask before every broadcast ---------------------------------------------------------
+
+async function ask(question: string): Promise<boolean> {
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  try {
+    return /^y(es)?$/i.test((await rl.question(question)).trim());
+  } finally {
+    rl.close();
+  }
+}
+
+/** Wraps a provider so every broadcast prints its outputs and waits for a "y". */
+function confirmingProvider(inner: NetworkProvider): NetworkProvider {
+  return new Proxy(inner, {
+    get(target, prop, receiver) {
+      if (prop === 'sendRawTransaction') {
+        return async (hex: string) => {
+          console.log(`\nAbout to broadcast on MAINNET:\n${describeTx(hex, network)}`);
+          if (!(await ask('Broadcast this transaction? [y/N] '))) throw new Error('broadcast declined; nothing was sent');
+          return target.sendRawTransaction(hex);
+        };
+      }
+      const v = Reflect.get(target, prop, receiver);
+      return typeof v === 'function' ? v.bind(target) : v;
+    },
+  });
+}
+
 // ---- main ----------------------------------------------------------------------------------------
 
 async function main() {
   if (command === 'keygen') {
-    if (network === 'mocknet') throw new Error('keygen is for chipnet');
+    if (network === 'mocknet') throw new Error('keygen is for chipnet or mainnet');
     const env = loadEnv();
     for (const r of ROLES) {
-      if (!env[`CHIPNET_${r}_WIF`]) setEnv(`CHIPNET_${r}_WIF`, encodePrivateKeyWif(generatePrivateKey(), 'testnet'));
+      const name = `${ENV_PREFIX}_${r}_WIF`;
+      if (!env[name]) setEnv(name, encodePrivateKeyWif(generatePrivateKey(), mainnet ? 'mainnet' : 'testnet'));
     }
     const keys = loadKeys();
-    setEnv('NEXT_PUBLIC_CHIPNET_VERIFIER_PK', binToHex(keys.VERIFIER.pk));
-    console.log('Throwaway chipnet keys are in .env.local (gitignored). Fund ONLY the agent address:\n');
-    console.log(`  agent      ${pkhToCashAddress(keys.AGENT.pkh, 'chipnet')}   <- faucet: https://apecs.dev/bch/faucets`);
-    console.log(`  challenger ${pkhToCashAddress(keys.CHALLENGER.pkh, 'chipnet')}`);
-    console.log(`  fee wallet ${pkhToCashAddress(keys.FEE_WALLET.pkh, 'chipnet')}`);
+    setEnv(`NEXT_PUBLIC_${ENV_PREFIX}_VERIFIER_PK`, binToHex(keys.VERIFIER.pk));
+    console.log(`Throwaway ${network} keys are in .env.local (gitignored). Fund ONLY the agent address:\n`);
+    if (mainnet) {
+      console.log(`  agent      ${pkhToCashAddress(keys.AGENT.pkh, network, true)}   <- ~30,000 sats of BCH and ~0.35 PUSD`);
+      console.log(`             (same key, plain form for wallets that only send BCH: ${pkhToCashAddress(keys.AGENT.pkh, network)})`);
+    } else {
+      console.log(`  agent      ${pkhToCashAddress(keys.AGENT.pkh, network)}   <- faucet: https://apecs.dev/bch/faucets`);
+    }
+    console.log(`  challenger ${pkhToCashAddress(keys.CHALLENGER.pkh, network)}`);
+    console.log(`  fee wallet ${pkhToCashAddress(keys.FEE_WALLET.pkh, network)}`);
     console.log(`  verifier pubkey ${binToHex(keys.VERIFIER.pk)}`);
-    console.log('\nThe full "all" run needs about 30,000 chipnet sats on the agent (several faucet drips).');
+    if (mainnet) {
+      console.log('\nThese keys hold real money in a plaintext file. Keep the balance tiny: the runner refuses an agent');
+      console.log('holding more than 250,000 sats or 10 PUSD. When you are done, run "npm run mainnet -- sweep <your address>".');
+    } else {
+      console.log('\nThe full "all" run needs about 30,000 chipnet sats on the agent (several faucet drips).');
+    }
     return;
   }
 
   const keys = loadKeys();
-  const provider = makeProvider(network, loadEnv().ELECTRUM_HOSTNAME);
-  if (provider instanceof MockNetworkProvider) {
-    provider.setBlockHeight(300_000);
-    seedMocknet(provider, keys.AGENT);
+  const raw = makeProvider(network, loadEnv().ELECTRUM_HOSTNAME);
+  if (raw instanceof MockNetworkProvider) {
+    raw.setBlockHeight(300_000);
+    seedMocknet(raw, keys.AGENT);
   }
+  const provider = mainnet && !assumeYes ? confirmingProvider(raw) : raw;
 
   const ctx: FlowContext = {
     network, provider,
     agent: keys.AGENT, challenger: keys.CHALLENGER, verifier: keys.VERIFIER, feeWallet: keys.FEE_WALLET,
-    category: network === 'mocknet' ? undefined : loadEnv().CHIPNET_TOKEN_CATEGORY || undefined,
+    category: mainnet ? PUSD_CATEGORY_MAINNET : network === 'mocknet' ? undefined : loadEnv().CHIPNET_TOKEN_CATEGORY || undefined,
+    amounts: mainnet || flags.has('--mainnet-amounts') ? MAINNET_AMOUNTS : CHIPNET_AMOUNTS,
     log: (l) => console.log(l),
     results: [],
     reachHeight: async (h) => {
-      if (provider instanceof MockNetworkProvider) {
-        if ((await provider.getBlockHeight()) < h) provider.setBlockHeight(h);
+      if (raw instanceof MockNetworkProvider) {
+        if ((await raw.getBlockHeight()) < h) raw.setBlockHeight(h);
         return true;
       }
       for (;;) {
-        const now = await provider.getBlockHeight();
+        const now = await raw.getBlockHeight();
         if (now >= h) return true;
         if (!wait) {
-          console.log(`  height ${now} < ${h}: run "npm run chipnet -- pending" again later (or add --wait)`);
+          console.log(`  height ${now} < ${h}: run "pending" again later (or add --wait)`);
           return false;
         }
         console.log(`  height ${now}, waiting for ${h}...`);
@@ -160,6 +225,9 @@ async function main() {
       }
     },
   };
+
+  const spends = ['all', 'cancel', 'pass', 'fail', 'noresponse', 'timeout', 'pending'].includes(command);
+  if (mainnet && spends) await checkMainnetCaps(ctx);
 
   const state = loadState();
   try {
@@ -170,18 +238,19 @@ async function main() {
     }
     switch (command) {
       case 'status': {
-        const h = await provider.getBlockHeight();
-        console.log(`network ${network}, height ${h}, token ${ctx.category ?? '(none yet)'}`);
+        const h = await raw.getBlockHeight();
+        console.log(`network ${network}, height ${h}, token ${ctx.category ?? '(none yet)'}${mainnet ? ' (PUSD)' : ''}`);
         for (const k of [keys.AGENT, keys.CHALLENGER, keys.FEE_WALLET]) {
-          const u = await provider.getUtxosForLockingBytecode(k.lock);
+          const u = await raw.getUtxosForLockingBytecode(k.lock);
           const sats = u.reduce((a, x) => a + x.satoshis, 0n);
           const tokens = u.filter((x) => x.token?.category === ctx.category).reduce((a, x) => a + x.token!.amount, 0n);
-          console.log(`  ${k.label.padEnd(10)} ${pkhToCashAddress(k.pkh, network === 'mocknet' ? 'mocknet' : 'chipnet')}  ${sats} sats, ${tokens} tokens`);
+          console.log(`  ${k.label.padEnd(10)} ${pkhToCashAddress(k.pkh, network)}  ${sats} sats, ${tokens} token base units`);
         }
         console.log(`  pending escrows: ${state.pending.length}`);
         break;
       }
       case 'genesis':
+        if (mainnet) throw new Error('no genesis on mainnet: bonds are PUSD');
         break;
       case 'cancel': await scenarioCancel(ctx); break;
       case 'pass': await scenarioPass(ctx); break;
@@ -199,6 +268,16 @@ async function main() {
         break;
       case 'pending':
         break;
+      case 'sweep': {
+        const to = positional[1];
+        if (!to) throw new Error(`usage: sweep <your ${networkPrefix(network)}: address>`);
+        const decoded = cashAddressToLockingBytecode(to.includes(':') ? to : `${networkPrefix(network)}:${to}`);
+        if (typeof decoded === 'string') throw new Error(`not a CashAddress: ${decoded}`);
+        if (decoded.prefix !== networkPrefix(network)) throw new Error(`${to} is not a ${network} address`);
+        if (state.pending.length) console.log(`  note: ${state.pending.length} escrow(s) still open; run "pending" first to get those back`);
+        await sweep(ctx, [keys.AGENT, keys.CHALLENGER, keys.FEE_WALLET], decoded.bytecode);
+        break;
+      }
       default:
         throw new Error(`unknown command "${command}"`);
     }
