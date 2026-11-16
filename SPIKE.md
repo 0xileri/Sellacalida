@@ -9,7 +9,7 @@ Spec: `SELLACALIDA_SPEC.md` section 11. Gate date: 16 November 2026 (WAT).
 | Contracts on mocknet | **Green.** Full vitest suite, `npm test`. |
 | Spike flows with a simulated wallet | **Green on mocknet.** `tests/spikeFlows.test.ts` signs every `/connect` flow with a mock WizardConnect wallet (fills P2PKH and contract placeholders the way Paytaca is documented to). This is not a real wallet result. |
 | Chipnet runs | **Skipped (decision below).** Keys were generated and the dry run passed on 13 Nov, but no chipnet faucet paid out by 16 Nov, so the agent was never funded. |
-| Mainnet run (replaces chipnet) | **Not run yet.** Capped mainnet mode of the same runner: `npm run mainnet -- ...`, PUSD bonds of 0.05, a y/N prompt before every broadcast. Waiting on ~30,000 sats and ~0.35 PUSD. Dry-run in CI (`tests/chipnetFlows.test.ts`). |
+| Mainnet run (replaces chipnet) | **Not run yet.** Capped mainnet mode of the same runner: `npm run mainnet -- ...`, PUSD bonds of 0.05, a y/N prompt before every broadcast. Waiting on ~40,000 sats and ~0.35 PUSD on the agent key. Dry-run and rehearsed (prompts included) on mocknet; `tests/chipnetFlows.test.ts`. Txids go in the step table below as each one lands. |
 | Real wallets (Paytaca, Selene) | **Not run yet.** Needs a phone or browser wallet. Fill in the tables below. |
 | Funding path decision | **Pending the real-wallet rows.** Default plan: test token / PUSD through WizardConnect. Fallbacks in order: the other wallet, an XO template for the token send, then BCH-only bonds. |
 
@@ -24,24 +24,32 @@ What limits the risk:
 - Same runner, same scenarios, same contracts as the chipnet plan. The only change is the network and the amounts.
 - PUSD only on mainnet (no test token), bonds of 5 base units (0.05 PUSD) and fees of 1 (0.01). A full run moves about 0.35 PUSD and ~30,000 sats.
 - The runner refuses to spend from an agent holding more than 250,000 sats or 10 PUSD, and refuses bonds above 0.10 PUSD.
-- Every broadcast prints its outputs (amounts, PUSD, addresses) and waits for `y`. `--yes` turns the prompt off.
-- Separate `MAINNET_*` keys; a testnet key is refused on a mainnet run. `sweep` sends whatever is left on the throwaway keys back to your own wallet.
+- Every broadcast prints its outputs (amounts, PUSD, addresses) and waits for `y`. Anything else, or stdin running out, is a no and nothing is sent. `--yes` turns the prompt off and says so.
+- Separate `MAINNET_*` keys; a testnet key is refused on a mainnet run. `sweep` sends whatever is left on the throwaway keys back to your own wallet, refuses to "sweep" into one of those keys, and sends PUSD only to a token-aware (`bitcoincash:z...`) address so a wallet without CashTokens support cannot burn it.
+- The runner checks the Electrum server's block height against the network before anything else.
 - The worst case for a bug that tests missed is a bond sitting in escrow until the timeout path refunds it, and that path is the one the timeout scenario proves.
 
 ## How to run the mainnet part
 
+One scenario per command, so each step can be checked before the next. Every broadcast asks first.
+
 ```bash
 npm install
-npm run mainnet -- keygen      # separate throwaway MAINNET_* keys in .env.local
-# send ~30,000 sats and ~0.35 PUSD to the agent's bitcoincash:z... address
-npm run mainnet -- status
-npm run mainnet -- all         # cancel, pass, fail, starts noresponse + timeout; asks before each broadcast
-npm run mainnet -- pending --wait   # NORESPONSE after 1 block, timeout after 19 blocks (~3 h)
-npm run mainnet -- sweep bitcoincash:z...   # your own wallet: everything left comes back
+npm run mainnet -- keygen            # separate throwaway MAINNET_* keys in .env.local
+# send ~40,000 sats and 0.35 PUSD to the agent's bitcoincash:z... address
+npm run mainnet -- status            # agent shows the sats and 35 token base units
+npm run mainnet -- cancel            # 2 txs: fund offer, cancel
+npm run mainnet -- pass              # 3 txs: fund offer, accept (exact), settle PASS
+npm run mainnet -- fail              # 3 txs: fund offer, accept (change 2), settle FAIL with a fee input
+npm run mainnet -- noresponse        # 2 txs: fund offer, accept; then wait 1 block
+npm run mainnet -- timeout           # 2 txs: fund offer, accept; then wait 19 blocks
+npm run mainnet -- pending           # settles NORESPONSE once it can, refunds the timeout once it can
+npm run mainnet -- sweep bitcoincash:z...   # your own token-aware address: everything left comes back
 ```
 
-On Windows PowerShell use `npm.cmd` in place of `npm`. Txids land in `data/mainnet-results.md` (gitignored). Paste the table below.
-Dry run of the mainnet amounts, no keys or network: `npm run chipnet -- all --network mocknet --mainnet-amounts`.
+On Windows PowerShell use `npm.cmd` in place of `npm`. The runner also writes every txid to `data/mainnet-results.md` (gitignored).
+
+Rehearse any step first with play money and the same prompts: `npm run chipnet -- pass --network mocknet --mainnet-amounts --confirm`.
 
 ## How to run the chipnet part (if chipnet coins turn up later)
 
@@ -84,11 +92,27 @@ Wallet: ______  Version: ______  Network: ______  Date (WAT): ______
 
 Repeat the table for the second wallet if time allows.
 
-## Mainnet txids (paste from `data/mainnet-results.md`)
+## Mainnet txids (capped run)
 
-| scenario | step | tx | note |
-| --- | --- | --- | --- |
-| | | | |
+Filled in as each broadcast lands. Explorer: explorer.bch.ninja.
+
+| # | Scenario | Step | Tx | Result |
+| --- | --- | --- | --- | --- |
+| 1 | cancel | fund offer (bond into the offer P2SH32) | | |
+| 2 | cancel | cancel (agent checkSig) | | |
+| 3 | pass | fund offer | | |
+| 4 | pass | accept (exact) | | |
+| 5 | pass | settle PASS (1-output) | | |
+| 6 | fail | fund offer | | |
+| 7 | fail | accept (change 2) | | |
+| 8 | fail | settle FAIL (2-output, fee input) | | |
+| 9 | noresponse | fund offer | | |
+| 10 | noresponse | accept (exact) | | |
+| 11 | noresponse | settle NORESPONSE (after 1 block) | | |
+| 12 | timeout | fund offer | | |
+| 13 | timeout | accept (change 1) | | |
+| 14 | timeout | timeout refund (after 19 blocks) | | |
+| 15 | sweep | sweep to your own wallet | | |
 
 ## Chipnet txids (paste from `data/chipnet-results.md`)
 

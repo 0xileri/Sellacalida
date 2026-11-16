@@ -3,7 +3,7 @@
 // FAIL, NORESPONSE, and timeout. Every scenario funds itself from the agent key in one transaction.
 // Signing here uses local throwaway keys (SignatureTemplate); the WizardConnect wallet path is
 // exercised by /connect. On mainnet the bond token is PUSD and amounts are cents (MAINNET_AMOUNTS).
-import { binToHex, decodeTransaction, hexToBin, sha256, utf8ToBin } from '@bitauth/libauth';
+import { binToHex, cashAddressToLockingBytecode, decodeCashAddress, decodeTransaction, hexToBin, sha256, utf8ToBin } from '@bitauth/libauth';
 import {
   MockNetworkProvider,
   TransactionBuilder,
@@ -12,7 +12,7 @@ import {
   type SpendableUtxo,
 } from 'cashscript';
 import { MIN_OUTPUT_SATS, PUSD_CATEGORY_MAINNET, type SellacalidaNetwork, type Verdict } from '../../lib/constants';
-import { lockingBytecodeToAddress } from '../../lib/bch/address';
+import { lockingBytecodeToAddress, networkPrefix } from '../../lib/bch/address';
 import { escrowArgsFor, makeEscrowContract, makeOfferContract, type ChallengeTerms, type OfferParams } from '../../lib/contracts';
 import { buildAccept, buildCancel, buildSettle, buildTimeout, p2pkhLockingBytecode, withFee } from '../../lib/bch/transactions';
 import { buildAttestation, sha256Utf8, signAttestation } from '../../lib/attestation';
@@ -394,10 +394,62 @@ export function describeTx(hex: string, network: SellacalidaNetwork): string {
 }
 
 /**
- * Send everything the given keys hold (BCH and tokens) to one locking bytecode, for example your own
- * wallet at the end of a mainnet run. Escrows that are still open are not swept; finish them first.
+ * Wrap a provider so every broadcast prints its outputs and needs a "y" first. Reads, heights and
+ * everything else pass straight through. Every TransactionBuilder in these flows broadcasts through
+ * provider.sendRawTransaction, so nothing reaches the network without an answer here.
  */
-export async function sweep(ctx: FlowContext, keys: Key[], toLock: Uint8Array): Promise<string | null> {
+export function confirmingProvider(
+  inner: NetworkProvider,
+  network: SellacalidaNetwork,
+  ask: (question: string) => Promise<boolean>,
+  log: (line: string) => void = console.log,
+): NetworkProvider {
+  return new Proxy(inner, {
+    get(target, prop, receiver) {
+      if (prop === 'sendRawTransaction') {
+        return async (hex: string) => {
+          log(`\nAbout to broadcast on ${network.toUpperCase()}:\n${describeTx(hex, network)}`);
+          if (!(await ask('Broadcast this transaction? [y/N] '))) throw new Error('broadcast declined; nothing was sent');
+          return target.sendRawTransaction(hex);
+        };
+      }
+      const v = Reflect.get(target, prop, receiver);
+      return typeof v === 'function' ? v.bind(target) : v;
+    },
+  });
+}
+
+export interface SweepDestination {
+  lock: Uint8Array;
+  /** a token-aware (z...) address: the wallet behind it says it can hold CashTokens */
+  tokenAware: boolean;
+}
+
+/**
+ * Validate a sweep destination: a CashAddress on this network, not one of the runner's own
+ * throwaway keys (that would leave the money in the plaintext .env.local).
+ */
+export function parseSweepDestination(address: string, network: SellacalidaNetwork, ownKeys: Key[]): SweepDestination {
+  const prefix = networkPrefix(network);
+  const full = address.includes(':') ? address : `${prefix}:${address}`;
+  const decoded = cashAddressToLockingBytecode(full);
+  if (typeof decoded === 'string') throw new Error(`not a CashAddress: ${decoded}`);
+  if (decoded.prefix !== prefix) throw new Error(`${address} is not a ${network} address`);
+  if (ownKeys.some((k) => binToHex(k.lock) === binToHex(decoded.bytecode))) {
+    throw new Error('that is one of the runner\'s own throwaway keys; sweep to your own wallet instead');
+  }
+  const info = decodeCashAddress(full);
+  const tokenAware = typeof info !== 'string' && info.type.endsWith('WithTokens');
+  return { lock: decoded.bytecode, tokenAware };
+}
+
+/**
+ * Send everything the given keys hold (BCH and tokens) to one destination, for example your own
+ * wallet at the end of a mainnet run. Escrows that are still open are not swept; finish them first.
+ * Tokens only go to a token-aware address: a wallet without CashTokens support can burn them.
+ */
+export async function sweep(ctx: FlowContext, keys: Key[], to: SweepDestination): Promise<string | null> {
+  const toLock = to.lock;
   const ins: { u: SpendableUtxo; k: Key }[] = [];
   for (const k of keys) for (const u of await utxosOf(ctx, k)) ins.push({ u, k });
   if (ins.length === 0) {
@@ -409,6 +461,12 @@ export async function sweep(ctx: FlowContext, keys: Key[], toLock: Uint8Array): 
     if (u.token && !u.token.nft) fungible.set(u.token.category, (fungible.get(u.token.category) ?? 0n) + u.token.amount);
   }
   const nfts = ins.filter((x) => x.u.token?.nft);
+  if ((fungible.size > 0 || nfts.length > 0) && !to.tokenAware) {
+    throw new Error(
+      'there are tokens to sweep: use your wallet\'s token-aware address (bitcoincash:z... on mainnet) so a wallet ' +
+        'without CashTokens support cannot burn them',
+    );
+  }
   const inSats = ins.reduce((a, x) => a + x.u.satoshis, 0n);
   const fixedOut = BigInt(fungible.size + nfts.length) * MIN_OUTPUT_SATS;
   const { builder, fee } = withFee((f) => {

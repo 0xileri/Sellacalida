@@ -2,6 +2,7 @@
 // confirmation re-checked from the raw tx, the agent run and the verifier tick.
 import { describe, expect, it, vi } from 'vitest';
 import { MockNetworkProvider, TransactionBuilder } from 'cashscript';
+import { encodePrivateKeyWif, generatePrivateKey } from '@bitauth/libauth';
 import type { LlmClient } from '@/lib/agent/llm';
 import { PUSD_CATEGORY_MAINNET } from '@/lib/constants';
 import { makeOfferContract } from '@/lib/contracts';
@@ -50,6 +51,33 @@ describe('config guards', () => {
   it('refuses the wrapped-PUSD lookalike and unknown networks', () => {
     expect(() => loadConfig({ NETWORK: 'chipnet', TOKEN_CATEGORY: '741dd9a36c0a1d8b6d396b5095880ac942dcf3f634d969a2caa1d2021687519f' })).toThrow(/wrapped/);
     expect(() => loadConfig({ NETWORK: 'testnet4' })).toThrow(/NETWORK/);
+  });
+
+  it('NETWORK is matched against an explicit list: object property names are not networks', () => {
+    for (const n of ['toString', 'constructor', '__proto__', 'hasOwnProperty', 'Mainnet', 'mainnet ']) {
+      expect(() => loadConfig({ NETWORK: n, TOKEN_CATEGORY: 'ab'.repeat(32) }), n).toThrow(/NETWORK must be mainnet, chipnet or mocknet/);
+    }
+  });
+
+  it('a key made for the other network is refused (WIFs carry their network)', () => {
+    const main = encodePrivateKeyWif(generatePrivateKey(), 'mainnet');
+    const test = encodePrivateKeyWif(generatePrivateKey(), 'testnet');
+    const chip = { NETWORK: 'chipnet', TOKEN_CATEGORY: 'ab'.repeat(32) };
+    expect(() => loadConfig({ NETWORK: 'mainnet', AGENT_WIF: test })).toThrow(/AGENT_WIF is a testnet key but NETWORK is mainnet/);
+    expect(() => loadConfig({ NETWORK: 'mainnet', FEE_WALLET_WIF: test })).toThrow(/FEE_WALLET_WIF is a testnet key/);
+    expect(() => loadConfig({ NETWORK: 'mainnet', VERIFIER_PRIVATE_KEY: test })).toThrow(/VERIFIER_PRIVATE_KEY is a testnet key/);
+    expect(() => loadConfig({ ...chip, AGENT_WIF: main })).toThrow(/AGENT_WIF is a mainnet key but NETWORK is chipnet/);
+    expect(loadConfig({ NETWORK: 'mainnet', AGENT_WIF: main, VERIFIER_PRIVATE_KEY: 'cd'.repeat(32) }).agent.wif).toBe(main); // raw hex has no network
+    expect(loadConfig({ NETWORK: 'mocknet', AGENT_WIF: main }).agent.wif).toBe(main); // play money takes either
+  });
+
+  it('on mainnet amounts always display as PUSD with 2 decimals', () => {
+    expect(loadConfig({ NETWORK: 'mainnet' })).toMatchObject({ tokenSymbol: 'PUSD', tokenDecimals: 2 });
+    expect(loadConfig({ NETWORK: 'mainnet', TOKEN_SYMBOL: 'PUSD', TOKEN_DECIMALS: '2' })).toMatchObject({ tokenSymbol: 'PUSD', tokenDecimals: 2 });
+    expect(() => loadConfig({ NETWORK: 'mainnet', TOKEN_DECIMALS: '0' })).toThrow(/PUSD with 2 decimals/); // 1.00 would read as 100
+    expect(() => loadConfig({ NETWORK: 'mainnet', TOKEN_SYMBOL: 'tPUSD' })).toThrow(/PUSD with 2 decimals/);
+    expect(() => loadConfig({ NETWORK: 'mocknet', TOKEN_DECIMALS: 'two' })).toThrow(/single digit/);
+    expect(loadConfig({ NETWORK: 'mocknet', TOKEN_DECIMALS: '8', TOKEN_SYMBOL: 'TEST' })).toMatchObject({ tokenSymbol: 'TEST', tokenDecimals: 8 });
   });
 });
 

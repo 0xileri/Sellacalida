@@ -13,6 +13,7 @@ Status: **42 of 43 proven by tests.** The open item needs real-chain txids from 
   - `tests/server.test.ts` › "chipnet requires its own category and refuses PUSD"
   - `tests/server.test.ts` › "refuses the wrapped-PUSD lookalike and unknown networks"
   - `tests/guards.test.ts` › "the PUSD constant is the verified mainnet-v1 id, not the wrapped token"
+  - `tests/server.test.ts` › "on mainnet amounts always display as PUSD with 2 decimals"
 - [x] Contract category is the unreversed VM bytes; SDK / wallet hex is explorer order. Both directions tested.
   - `tests/guards.test.ts` › "explorer hex <-> VM bytes round-trips"
   - `tests/offer.test.ts` › "an offer built with the explorer-order category (not swapped) cannot be accepted"
@@ -167,6 +168,7 @@ Status: **42 of 43 proven by tests.** The open item needs real-chain txids from 
   - `tests/server.test.ts` › "the app will not publish a mainnet bond above the cap, or from an agent wallet holding too much"
   - `tests/chipnetFlows.test.ts` › "refuses to spend from an agent hot wallet above the caps"
   - `tests/chipnetFlows.test.ts` › "never mints a token on mainnet and refuses bonds above the cap"
+  - `tests/chipnetFlows.test.ts` › "a "no" broadcasts nothing and changes nothing on chain"
   - Note: Two layers. The app refuses mainnet bonds above 1.00 PUSD and an agent wallet above 1,000,000 sats or 20 PUSD. The milestone runner refuses bonds above 0.10 PUSD and an agent above 250,000 sats or 10 PUSD. `keygen` makes fresh agent keys per network.
 - [x] Integer math only; no `Number` for token amounts.
   - `tests/secrets.test.ts` › "no %s anywhere in lib/, app/ or scripts/"
@@ -201,6 +203,8 @@ Status: **42 of 43 proven by tests.** The open item needs real-chain txids from 
   - `tests/server.test.ts` › "the verifier loop and createOffer stop until the server matches"
   - `tests/templates.test.ts` › "rejects an address for the wrong network"
   - `tests/server.test.ts` › "rejects a challenger address from another network"
+  - `tests/server.test.ts` › "a key made for the other network is refused (WIFs carry their network)"
+  - `tests/server.test.ts` › "NETWORK is matched against an explicit list: object property names are not networks"
   - Note: The Electrum check is a height test: mainnet is above 800,000 and chipnet far below, so a server on the wrong network stops the verifier loop and offer publishing. The runner also refuses a testnet key on a mainnet run.
 - [ ] Dust and fee sufficiency: transactions still relay.
   - `tests/guards.test.ts` › "MIN_OUTPUT_SATS covers a token-bearing P2PKH output"

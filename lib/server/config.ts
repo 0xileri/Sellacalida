@@ -1,7 +1,7 @@
 // Server configuration from the environment (.env.local). Chipnet and mainnet settings can never
 // be mixed: the token category, network id, Electrum server and addresses all follow NETWORK.
-import { binToHex, sha256, utf8ToBin } from '@bitauth/libauth';
-import { KNOWN_WRONG_PUSD_CATEGORY, MAINNET_MAX_BOND, NETWORK_IDS, PUSD_CATEGORY_MAINNET, type SellacalidaNetwork } from '../constants';
+import { binToHex, decodePrivateKeyWif, sha256, utf8ToBin } from '@bitauth/libauth';
+import { KNOWN_WRONG_PUSD_CATEGORY, MAINNET_MAX_BOND, PUSD_CATEGORY_MAINNET, PUSD_DECIMALS, type SellacalidaNetwork } from '../constants';
 import { assertExplorerCategory } from '../tokenCategory';
 import type { PublicConfig } from '../wire';
 
@@ -33,9 +33,30 @@ function int(env: Record<string, string | undefined>, key: string, fallback: big
   return BigInt(v);
 }
 
+const NETWORKS: readonly string[] = ['mainnet', 'chipnet', 'mocknet'];
+
+/**
+ * A WIF says which network it was made for; refuse a testnet key on mainnet and the reverse, as the
+ * runner does. Raw hex keys carry no network. Mocknet takes either. Decode errors are reported where
+ * the key is loaded.
+ */
+function assertKeyNetwork(name: string, value: string | undefined, network: SellacalidaNetwork) {
+  if (!value || network === 'mocknet') return;
+  const v = value.trim();
+  if (/^[0-9a-f]{64}$/i.test(v)) return;
+  const d = decodePrivateKeyWif(v);
+  if (typeof d === 'string') return;
+  const mainnetKey = d.type === 'mainnet' || d.type === 'mainnetUncompressed';
+  if (mainnetKey !== (network === 'mainnet')) {
+    throw new Error(`${name} is a ${mainnetKey ? 'mainnet' : 'testnet'} key but NETWORK is ${network}`);
+  }
+}
+
 export function loadConfig(env: Record<string, string | undefined> = process.env): ServerConfig {
   const network = (env.NETWORK || 'chipnet') as SellacalidaNetwork;
-  if (!(network in NETWORK_IDS)) throw new Error(`NETWORK must be mainnet, chipnet or mocknet, got "${network}"`);
+  // an explicit list, not `in`: "toString" or "constructor" must not count as a network
+  if (!NETWORKS.includes(network)) throw new Error(`NETWORK must be mainnet, chipnet or mocknet, got "${network}"`);
+  for (const name of ['AGENT_WIF', 'FEE_WALLET_WIF', 'VERIFIER_PRIVATE_KEY']) assertKeyNetwork(name, env[name], network);
 
   const fallbackCategory =
     network === 'mainnet' ? PUSD_CATEGORY_MAINNET : network === 'mocknet' ? binToHex(sha256.hash(utf8ToBin('sellacalida-mocknet-token'))) : '';
@@ -45,6 +66,16 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
   if (tokenCategory === KNOWN_WRONG_PUSD_CATEGORY) throw new Error('TOKEN_CATEGORY is the wrapped token, not mainnet-v1 PUSD');
   if (network === 'mainnet' && tokenCategory !== PUSD_CATEGORY_MAINNET) throw new Error('on mainnet TOKEN_CATEGORY must be PUSD (mainnet-v1)');
   if (network !== 'mainnet' && tokenCategory === PUSD_CATEGORY_MAINNET) throw new Error(`never use the mainnet PUSD category on ${network}`);
+
+  // the UI shows amounts with these; on mainnet they are PUSD's and cannot be overridden, so a bond
+  // can never be displayed as 100 PUSD when it is 1.00
+  const decimalsRaw = env.TOKEN_DECIMALS || String(PUSD_DECIMALS);
+  if (!/^[0-9]$/.test(decimalsRaw)) throw new Error(`TOKEN_DECIMALS must be a single digit, got "${decimalsRaw}"`);
+  const tokenDecimals = Number(decimalsRaw);
+  const tokenSymbol = env.TOKEN_SYMBOL || (network === 'mainnet' ? 'PUSD' : 'tPUSD');
+  if (network === 'mainnet' && (tokenDecimals !== PUSD_DECIMALS || tokenSymbol !== 'PUSD')) {
+    throw new Error('on mainnet the token is PUSD with 2 decimals: remove TOKEN_SYMBOL and TOKEN_DECIMALS or set them to PUSD and 2');
+  }
 
   const offerDefaults = {
     bond: int(env, 'OFFER_BOND', 100n),
@@ -59,8 +90,8 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
   return {
     network,
     tokenCategory,
-    tokenSymbol: env.TOKEN_SYMBOL || (network === 'mainnet' ? 'PUSD' : 'tPUSD'),
-    tokenDecimals: Number(env.TOKEN_DECIMALS ?? 2),
+    tokenSymbol,
+    tokenDecimals,
     electrumHostname: env.ELECTRUM_HOSTNAME || undefined,
     dataDir: env.DATA_DIR || 'data',
     adminToken: env.ADMIN_TOKEN || undefined,
