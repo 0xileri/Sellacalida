@@ -59,6 +59,17 @@ describe('canonical spec JSON', () => {
   });
 });
 
+describe('answerHash bytes (spec section 4)', () => {
+  // vectors computed independently (Python hashlib.sha256 over the UTF-8 bytes), not with our code
+  it('answerHash is sha256 of the UTF-8 canonical answer, nothing added', async () => {
+    const { sha256Utf8 } = await import('@/lib/attestation');
+    expect(sha256Hex('42')).toBe('73475cb40a568e8da8a045ced110137e159f890ac4da883b6b17dc651b3a8049');
+    expect(sha256Hex('-10')).toBe('c171d4ec282b23db89a99880cd624e9ba2940c1d894783602edab5d7481dc1ea');
+    expect(sha256Hex('')).toBe('e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855');
+    expect(binToHex(sha256Utf8('42'))).toBe('73475cb40a568e8da8a045ced110137e159f890ac4da883b6b17dc651b3a8049');
+  });
+});
+
 describe('template shape validation (agent-safe)', () => {
   it.each(Object.entries(valid))('%s spec is valid', (_l, spec) => {
     expect(validateSpecShape(spec)).toEqual([]);

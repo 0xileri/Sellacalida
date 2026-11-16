@@ -1,7 +1,7 @@
 // Server configuration from the environment (.env.local). Chipnet and mainnet settings can never
 // be mixed: the token category, network id, Electrum server and addresses all follow NETWORK.
 import { binToHex, sha256, utf8ToBin } from '@bitauth/libauth';
-import { KNOWN_WRONG_PUSD_CATEGORY, NETWORK_IDS, PUSD_CATEGORY_MAINNET, type SellacalidaNetwork } from '../constants';
+import { KNOWN_WRONG_PUSD_CATEGORY, MAINNET_MAX_BOND, NETWORK_IDS, PUSD_CATEGORY_MAINNET, type SellacalidaNetwork } from '../constants';
 import { assertExplorerCategory } from '../tokenCategory';
 import type { PublicConfig } from '../wire';
 
@@ -46,6 +46,16 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
   if (network === 'mainnet' && tokenCategory !== PUSD_CATEGORY_MAINNET) throw new Error('on mainnet TOKEN_CATEGORY must be PUSD (mainnet-v1)');
   if (network !== 'mainnet' && tokenCategory === PUSD_CATEGORY_MAINNET) throw new Error(`never use the mainnet PUSD category on ${network}`);
 
+  const offerDefaults = {
+    bond: int(env, 'OFFER_BOND', 100n),
+    fee: int(env, 'OFFER_FEE', 20n),
+    maxDeadlineDelta: int(env, 'OFFER_MAX_DEADLINE_DELTA', 144n),
+    verifierGraceBlocks: int(env, 'OFFER_GRACE_BLOCKS', 18n),
+  };
+  if (network === 'mainnet' && (offerDefaults.bond > MAINNET_MAX_BOND || offerDefaults.fee > MAINNET_MAX_BOND)) {
+    throw new Error(`on mainnet OFFER_BOND and OFFER_FEE are capped at ${MAINNET_MAX_BOND} base units (1.00 PUSD)`);
+  }
+
   return {
     network,
     tokenCategory,
@@ -60,12 +70,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
       bio: env.AGENT_BIO || 'An AI agent that answers BCH transaction questions and exact arithmetic, and bonds its own money on every answer.',
       wif: env.AGENT_WIF || undefined,
     },
-    offerDefaults: {
-      bond: int(env, 'OFFER_BOND', 100n),
-      fee: int(env, 'OFFER_FEE', 20n),
-      maxDeadlineDelta: int(env, 'OFFER_MAX_DEADLINE_DELTA', 144n),
-      verifierGraceBlocks: int(env, 'OFFER_GRACE_BLOCKS', 18n),
-    },
+    offerDefaults,
     offerSats: int(env, 'OFFER_SATS', 3000n),
     escrowSats: int(env, 'ESCROW_SATS', 3000n),
     verifierTickMs: Number(env.VERIFIER_TICK_MS ?? 20_000),

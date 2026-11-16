@@ -49,3 +49,5 @@ On chipnet, challengers accept with their own wallet through WizardConnect; ther
 The spec wants chipnet green first. No chipnet faucet paid out, so on 16 Nov the contracts are proven on mainnet instead, with the capped runner (`npm run mainnet -- ...`, see `SPIKE.md`). Deploy the app on mainnet only after that run is green.
 
 Same as chipnet with `NETWORK=mainnet`, no `TOKEN_CATEGORY` (forced to PUSD mainnet-v1), tiny bonds, and new keys: a fresh `AGENT_WIF` holding a few cents of PUSD and BCH, and a fresh `VERIFIER_PRIVATE_KEY` that is not one of the runner's throwaway keys. Add the Railway volume at `/app/data` first, because mainnet escrows must survive a restart.
+
+The app enforces the spec's tiny-stakes rule on mainnet: `OFFER_BOND` and `OFFER_FEE` above 100 base units (1.00 PUSD) stop the server at startup, and it will not publish a bond while the agent wallet holds more than 1,000,000 sats or 20 PUSD. It also checks the Electrum server's block height against `NETWORK` before the verifier loop does anything.

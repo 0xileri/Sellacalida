@@ -8,8 +8,9 @@ import { TransactionBuilder, type SpendableUtxo } from 'cashscript';
 import { answerChallenge } from '../agent/runner';
 import { pkhToCashAddress, networkPrefix } from '../bch/address';
 import { buildAccept, buildCancel, withFee, DEFAULT_FEE_RATE } from '../bch/transactions';
+import { assertChainMatchesNetwork } from '../bch/network';
 import { decodeVerified } from '../bch/txSource';
-import { MIN_OUTPUT_SATS } from '../constants';
+import { MAINNET_AGENT_MAX_SATS, MAINNET_AGENT_MAX_TOKENS, MAINNET_MAX_BOND, MIN_OUTPUT_SATS } from '../constants';
 import { escrowArgsFor, makeOfferContract, validateExpiry, validateOfferParams, type ChallengeTerms, type OfferParams } from '../contracts';
 import { escrowLockingBytecode } from '../encodeRedeemScript';
 import { parseCanonical, specHashOf } from '../templates/canonical';
@@ -57,6 +58,13 @@ export function ensureAgent(ctx: ServerContext) {
 // offers (published by the agent's hot wallet)
 // ---------------------------------------------------------------------------------------------
 
+/** Once per process: the Electrum server must be on the configured network (see assertChainMatchesNetwork). */
+export async function ensureChainChecked(ctx: ServerContext) {
+  if (ctx.runtime.chainChecked) return;
+  await assertChainMatchesNetwork(ctx.provider, ctx.config.network);
+  ctx.runtime.chainChecked = true;
+}
+
 export async function createOffer(
   ctx: ServerContext,
   overrides: Partial<{ bond: bigint; fee: bigint; maxDeadlineDelta: bigint; verifierGraceBlocks: bigint }> = {},
@@ -77,9 +85,24 @@ export async function createOffer(
     verifierGraceBlocks: d.verifierGraceBlocks,
   };
   validateOfferParams(params);
+  if (ctx.config.network === 'mainnet' && (params.bondAmount > MAINNET_MAX_BOND || params.feeAmount > MAINNET_MAX_BOND)) {
+    throw new UserError(`on mainnet bonds and fees are capped at ${MAINNET_MAX_BOND} base units (1.00 PUSD)`);
+  }
+  await ensureChainChecked(ctx);
 
   const category = params.tokenCategory;
   const utxos = await ctx.provider.getUtxosForLockingBytecode(ctx.agentKey.lock);
+  if (ctx.config.network === 'mainnet') {
+    const sats = utxos.reduce((a, u) => a + u.satoshis, 0n);
+    const held = utxos.filter((u) => u.token?.category === category).reduce((a, u) => a + u.token!.amount, 0n);
+    if (sats > MAINNET_AGENT_MAX_SATS || held > MAINNET_AGENT_MAX_TOKENS) {
+      throw new UserError(
+        `the agent hot wallet holds ${sats} sats and ${held} PUSD base units, over the mainnet cap ` +
+          `(${MAINNET_AGENT_MAX_SATS} sats, ${MAINNET_AGENT_MAX_TOKENS} base units). Move the excess out; this key sits on a server.`,
+        409,
+      );
+    }
+  }
   const tokenIns: SpendableUtxo[] = [];
   let tokens = 0n;
   for (const u of utxos.filter((x) => x.token?.category === category && !x.token.nft).sort((a, b) => (b.token!.amount > a.token!.amount ? 1 : -1))) {

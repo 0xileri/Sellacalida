@@ -9,8 +9,10 @@ import { loadConfig } from '@/lib/server/config';
 import { buildContextFromEnv, type ServerContext } from '@/lib/server/context';
 import {
   UserError, agentView, cancelOffer, challengeView, confirmAccept, createOffer, devSimulateAccept, prepareChallenge,
-  afterAccept, ensureOpenOffers, refreshOffers, statsView, verifierTick,
+  afterAccept, ensureChainChecked, ensureOpenOffers, refreshOffers, statsView, verifierTick,
 } from '@/lib/server/service';
+import { assertChainMatchesNetwork } from '@/lib/bch/network';
+import type { NetworkProvider } from 'cashscript';
 import type { ChallengeSpec } from '@/lib/templates/public';
 import { reproduceEvidence, type Evidence } from '@/lib/verifier/evidence';
 import { pkhToCashAddress } from '@/lib/bch/address';
@@ -48,6 +50,56 @@ describe('config guards', () => {
   it('refuses the wrapped-PUSD lookalike and unknown networks', () => {
     expect(() => loadConfig({ NETWORK: 'chipnet', TOKEN_CATEGORY: '741dd9a36c0a1d8b6d396b5095880ac942dcf3f634d969a2caa1d2021687519f' })).toThrow(/wrapped/);
     expect(() => loadConfig({ NETWORK: 'testnet4' })).toThrow(/NETWORK/);
+  });
+});
+
+describe('mainnet caps (spec: tiny bonds, a throwaway agent wallet with a tiny cap)', () => {
+  it('config refuses mainnet bonds or fees above 1.00 PUSD', () => {
+    expect(loadConfig({ NETWORK: 'mainnet', OFFER_BOND: '100', OFFER_FEE: '20' }).offerDefaults.bond).toBe(100n);
+    expect(() => loadConfig({ NETWORK: 'mainnet', OFFER_BOND: '101' })).toThrow(/capped at 100 base units/);
+    expect(() => loadConfig({ NETWORK: 'mainnet', OFFER_FEE: '500' })).toThrow(/capped at 100 base units/);
+    expect(loadConfig({ NETWORK: 'mocknet', OFFER_BOND: '5000' }).offerDefaults.bond).toBe(5000n); // play money is not capped
+  });
+
+  it('the app will not publish a mainnet bond above the cap, or from an agent wallet holding too much', async () => {
+    const ctx = devCtx();
+    ctx.config = { ...ctx.config, network: 'mainnet' };
+    ctx.runtime.chainChecked = true; // the mock chain sits at a chipnet-like height; the guard is tested below
+    const big = await createOffer(ctx, { bond: 101n }).catch((e) => e);
+    expect(big).toBeInstanceOf(UserError);
+    expect(big.message).toMatch(/capped at 100 base units/);
+    // the mocknet seed gives the agent 5,000,000 sats and 1,000,000 tokens: far over the hot-wallet cap
+    const rich = await createOffer(ctx).catch((e) => e);
+    expect(rich).toBeInstanceOf(UserError);
+    expect(rich.status).toBe(409);
+    expect(rich.message).toMatch(/over the mainnet cap/);
+    expect(ctx.db.offers).toHaveLength(0);
+  });
+});
+
+describe('Electrum server on the wrong network', () => {
+  const at = (h: number) => ({ getBlockHeight: vi.fn(async () => h) }) as unknown as NetworkProvider;
+
+  it('a mainnet config refuses a server at a chipnet height, and the reverse', async () => {
+    await expect(assertChainMatchesNetwork(at(925_000), 'mainnet')).resolves.toBe(925_000);
+    await expect(assertChainMatchesNetwork(at(290_000), 'chipnet')).resolves.toBe(290_000);
+    await expect(assertChainMatchesNetwork(at(290_000), 'mainnet')).rejects.toThrow(/not mainnet, but NETWORK is mainnet/);
+    await expect(assertChainMatchesNetwork(at(925_000), 'chipnet')).rejects.toThrow(/which is mainnet, but NETWORK is chipnet/);
+    const mock = at(1);
+    await expect(assertChainMatchesNetwork(mock, 'mocknet')).resolves.toBeNull();
+    expect(mock.getBlockHeight).not.toHaveBeenCalled();
+  });
+
+  it('the verifier loop and createOffer stop until the server matches', async () => {
+    const ctx = devCtx();
+    ctx.config = { ...ctx.config, network: 'mainnet' };
+    ctx.provider = at(290_000);
+    await expect(ensureChainChecked(ctx)).rejects.toThrow(/check ELECTRUM_HOSTNAME/);
+    expect(ctx.runtime.chainChecked).toBe(false);
+    await expect(createOffer(ctx)).rejects.toThrow(/check ELECTRUM_HOSTNAME/);
+    ctx.provider = at(925_000);
+    await ensureChainChecked(ctx);
+    expect(ctx.runtime.chainChecked).toBe(true);
   });
 });
 

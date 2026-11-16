@@ -6,7 +6,7 @@ BCH BLAZE 2026, mainnet track. Solo build by [0xileri](https://github.com/0xiler
 
 An AI agent locks a bond (PUSD, or a chipnet test token) in a CashScript offer covenant. A challenger accepts in a single transaction from their own wallet, adding a fee and a parameterized, objectively checkable challenge. A verifier runs a deterministic test and signs pass, fail or no-response. The escrow contract pays the agent on pass, pays the challenger on fail or no-response, and refunds both sides if no attestation arrives before the block-height deadline.
 
-The full design is in [`SELLACALIDA_SPEC.md`](./SELLACALIDA_SPEC.md). Wallet spike results go in [`SPIKE.md`](./SPIKE.md).
+The full design is in [`SELLACALIDA_SPEC.md`](./SELLACALIDA_SPEC.md). Wallet spike results go in [`SPIKE.md`](./SPIKE.md). The spec's security checklist, item by item with the tests that prove each one, is [`SECURITY_CHECKLIST.md`](./SECURITY_CHECKLIST.md).
 
 ## Trust boundary
 
@@ -20,9 +20,10 @@ Milestone 1 (contracts + wallet spike) is in progress:
 
 - `contracts/SellacalidaOffer.cash`, `contracts/SellacalidaEscrow.cash`: written, compiled with cashc 0.14.0, green on mocknet.
 - Contract runner and `/connect` wallet spike page: built and dry-run on mocknet. No chipnet faucet paid out, so the real-chain run is a capped mainnet run (`npm run mainnet`, cent-sized PUSD bonds, a prompt before every broadcast); it and the real-wallet run are pending (see `SPIKE.md`).
-- Challenge templates, checkers, the verifier core (decide, sign, settle, timeout), the write-once answer store and reproducible evidence: built and tested on mocknet. Not running live anywhere yet.
+- Challenge templates, checkers, the verifier core (decide, sign, settle, timeout), the write-once answer store and reproducible evidence: built and tested on mocknet, and running live on the mocknet preview.
 - Agent runner: calls a real LLM (default `anthropic/claude-sonnet-5.5`) through Orbio's OpenAI-compatible gateway (any compatible base URL works), parses the reply strictly, and commits it write-once with the model id that actually served it. For BCH templates it gets one tool, `get_transaction`, which returns outputs decoded from raw hex verified against the txid; every call is recorded in the commitment and the evidence. `npm run agent:try` asks it one challenge.
-- App: pages `/`, `/arena`, `/challenge/[id]` and `/agent/[id]`, a JSON API, and an in-process verifier loop (started from `instrumentation.ts`). Tested end to end on mocknet with the live agent through the real UI; not yet run against chipnet or a real wallet.
+- App: pages `/`, `/arena`, `/challenge/[id]` and `/agent/[id]`, a JSON API, and an in-process verifier loop (started from `instrumentation.ts`). Tested end to end on mocknet with the live agent through the real UI; not yet run against a real chain or a real wallet. On mainnet it caps bonds at 1.00 PUSD and the agent hot wallet at 1,000,000 sats or 20 PUSD, and refuses an Electrum server on the wrong network.
+- Security checklist (spec section 9): 42 of 43 items proven by tests, see `SECURITY_CHECKLIST.md`. The open one, real-chain relay, waits on the mainnet run.
 
 ## Layout
 
