@@ -9,7 +9,7 @@ Spec: `SELLACALIDA_SPEC.md` section 11. Gate date: 16 November 2026 (WAT).
 | Contracts on mocknet | **Green.** Full vitest suite, `npm test`. |
 | Spike flows with a simulated wallet | **Green on mocknet.** `tests/spikeFlows.test.ts` signs every `/connect` flow with a mock WizardConnect wallet (fills P2PKH and contract placeholders the way Paytaca is documented to). This is not a real wallet result. |
 | Chipnet runs | **Skipped (decision below).** Keys were generated and the dry run passed on 13 Nov, but no chipnet faucet paid out by 16 Nov, so the agent was never funded. |
-| Mainnet run (replaces chipnet) | **Not run yet.** Capped mainnet mode of the same runner: `npm run mainnet -- ...`, PUSD bonds of 0.05, a y/N prompt before every broadcast. Waiting on ~40,000 sats and ~0.35 PUSD on the agent key. Dry-run and rehearsed (prompts included) on mocknet; `tests/chipnetFlows.test.ts`. Txids go in the step table below as each one lands. |
+| Mainnet run (replaces chipnet) | **In progress: 2 of 15 broadcast (cancel done).** Capped mainnet mode of the same runner: `npm run mainnet -- ...`, PUSD bonds of 0.05, a y/N prompt before every broadcast. Agent funded on 17 Nov with 501,000 sats and 1.00 PUSD (inside the 1,000,000-sat / 20 PUSD cap). Dry-run and rehearsed (prompts included) on mocknet; `tests/chipnetFlows.test.ts`. Txids go in the step table below as each one lands. |
 | Real wallets (Paytaca, Selene) | **Not run yet.** Needs a phone or browser wallet. Fill in the tables below. |
 | Funding path decision | **Pending the real-wallet rows.** Default plan: test token / PUSD through WizardConnect. Fallbacks in order: the other wallet, an XO template for the token send, then BCH-only bonds. |
 
@@ -98,8 +98,8 @@ Filled in as each broadcast lands. Explorer: explorer.bch.ninja.
 
 | # | Scenario | Step | Tx | Result |
 | --- | --- | --- | --- | --- |
-| 1 | cancel | fund offer (bond into the offer P2SH32) | | |
-| 2 | cancel | cancel (agent checkSig) | | |
+| 1 | cancel | fund offer (bond into the offer P2SH32) | [2e9a10e893…](https://explorer.bch.ninja/tx/2e9a10e8930401bc1f4a23fe605c98ae8ee645a108fba4e10b932243dfe7ba0e) | Broadcast 17 Nov. 474 B, 2 in / 3 out: 5 PUSD + 3,000 sats into the offer `bitcoincash:pds8kexq…a0gp`, 95 PUSD and 496,476 sats change to the agent. |
+| 2 | cancel | cancel (agent checkSig) | [e3e8d2fbff…](https://explorer.bch.ninja/tx/e3e8d2fbffaa09abfd0d8ec6ace4943a44c503e5b85fc2dcdcba2140da8830fa) | Broadcast 17 Nov. 1,174 B, 1 in / 1 out: the agent's checkSig path of the covenant; the 5 PUSD bond and 1,706 sats back to the agent. First real-chain covenant spend. |
 | 3 | pass | fund offer | | |
 | 4 | pass | accept (exact) | | |
 | 5 | pass | settle PASS (1-output) | | |
