@@ -169,7 +169,7 @@ Status: **42 of 43 proven by tests.** The open item needs real-chain txids from 
   - `tests/chipnetFlows.test.ts` › "refuses to spend from an agent hot wallet above the caps"
   - `tests/chipnetFlows.test.ts` › "never mints a token on mainnet and refuses bonds above the cap"
   - `tests/chipnetFlows.test.ts` › "a "no" broadcasts nothing and changes nothing on chain"
-  - Note: Two layers. The app refuses mainnet bonds above 1.00 PUSD and an agent wallet above 1,000,000 sats or 20 PUSD. The milestone runner refuses bonds above 0.10 PUSD and an agent above 250,000 sats or 10 PUSD. `keygen` makes fresh agent keys per network.
+  - Note: Two layers. The app refuses mainnet bonds above 1.00 PUSD and an agent wallet above 1,000,000 sats or 20 PUSD. The milestone runner refuses bonds above 0.10 PUSD and uses the same hot-wallet cap. `keygen` makes fresh agent keys per network.
 - [x] Integer math only; no `Number` for token amounts.
   - `tests/secrets.test.ts` › "no %s anywhere in lib/, app/ or scripts/"
   - `tests/ui.test.ts` › "amounts render from integer base units without floating point"

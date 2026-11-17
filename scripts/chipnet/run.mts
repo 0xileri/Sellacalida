@@ -205,7 +205,7 @@ async function main() {
     console.log(`  verifier pubkey ${binToHex(keys.VERIFIER.pk)}`);
     if (mainnet) {
       console.log('\nThese keys hold real money in a plaintext file. Keep the balance tiny: the runner refuses an agent');
-      console.log('holding more than 250,000 sats or 10 PUSD. When you are done, run "npm run mainnet -- sweep <your address>".');
+      console.log('holding more than 1,000,000 sats or 20 PUSD. When you are done, run "npm run mainnet -- sweep <your address>".');
     } else {
       console.log('\nThe full "all" run needs about 30,000 chipnet sats on the agent (several faucet drips).');
     }

@@ -112,7 +112,11 @@ describe('capped mainnet mode (dry run on mocknet)', () => {
     const small = mockCtx({ category: PUSD_CATEGORY_MAINNET }, 40_000n);
     givePusd(small.provider, small.agent, 35n);
     await expect(checkMainnetCaps(small.ctx)).resolves.toEqual({ sats: 41_000n, tokens: 35n });
-    const big = mockCtx({ category: PUSD_CATEGORY_MAINNET }, 300_000n);
+    // the agent funded on 17 Nov held 501,000 sats: inside the cap
+    const real = mockCtx({ category: PUSD_CATEGORY_MAINNET }, 500_000n);
+    givePusd(real.provider, real.agent, 100n);
+    await expect(checkMainnetCaps(real.ctx)).resolves.toEqual({ sats: 501_000n, tokens: 100n });
+    const big = mockCtx({ category: PUSD_CATEGORY_MAINNET }, 1_000_001n); // the cap allows exactly 1,000,000
     await expect(checkMainnetCaps(big.ctx)).rejects.toThrow(/over the mainnet runner caps/);
     const rich = mockCtx({ category: PUSD_CATEGORY_MAINNET }, 40_000n);
     givePusd(rich.provider, rich.agent, 5_000n);

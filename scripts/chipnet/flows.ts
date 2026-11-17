@@ -11,7 +11,9 @@ import {
   type SignatureTemplate,
   type SpendableUtxo,
 } from 'cashscript';
-import { MIN_OUTPUT_SATS, PUSD_CATEGORY_MAINNET, type SellacalidaNetwork, type Verdict } from '../../lib/constants';
+import {
+  MAINNET_AGENT_MAX_SATS, MAINNET_AGENT_MAX_TOKENS, MIN_OUTPUT_SATS, PUSD_CATEGORY_MAINNET, type SellacalidaNetwork, type Verdict,
+} from '../../lib/constants';
 import { lockingBytecodeToAddress, networkPrefix } from '../../lib/bch/address';
 import { escrowArgsFor, makeEscrowContract, makeOfferContract, type ChallengeTerms, type OfferParams } from '../../lib/contracts';
 import { buildAccept, buildCancel, buildSettle, buildTimeout, p2pkhLockingBytecode, withFee } from '../../lib/bch/transactions';
@@ -71,11 +73,12 @@ export const CHIPNET_AMOUNTS: Amounts = { bond: BOND, fee: FEE, failChange: 35n,
 /** Mainnet uses real PUSD: a 0.05 bond and a 0.01 fee. A full run moves about 0.35 PUSD. */
 export const MAINNET_AMOUNTS: Amounts = { bond: 5n, fee: 1n, failChange: 2n, timeoutChange: 1n };
 
-// Mainnet hot-wallet caps for the runner: the throwaway keys live in a plaintext .env.local, so the
-// runner refuses to spend from an agent holding more than this. Move the excess out with "sweep".
+// Mainnet caps for the runner. Bonds stay at cents. The throwaway keys live in a plaintext
+// .env.local, so the runner refuses to spend from an agent holding more than the app's own mainnet
+// hot-wallet cap (lib/constants.ts: 1,000,000 sats or 20.00 PUSD). Move any excess out with "sweep".
 export const MAINNET_MAX_BOND = 10n;
-export const MAINNET_MAX_AGENT_SATS = 250_000n;
-export const MAINNET_MAX_AGENT_TOKENS = 1_000n; // 10.00 PUSD
+export const MAINNET_MAX_AGENT_SATS = MAINNET_AGENT_MAX_SATS;
+export const MAINNET_MAX_AGENT_TOKENS = MAINNET_AGENT_MAX_TOKENS;
 
 function amountsOf(ctx: FlowContext): Amounts {
   return ctx.amounts ?? CHIPNET_AMOUNTS;

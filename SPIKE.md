@@ -23,7 +23,7 @@ What limits the risk:
 
 - Same runner, same scenarios, same contracts as the chipnet plan. The only change is the network and the amounts.
 - PUSD only on mainnet (no test token), bonds of 5 base units (0.05 PUSD) and fees of 1 (0.01). A full run moves about 0.35 PUSD and ~30,000 sats.
-- The runner refuses to spend from an agent holding more than 250,000 sats or 10 PUSD, and refuses bonds above 0.10 PUSD.
+- The runner refuses to spend from an agent holding more than 1,000,000 sats or 20 PUSD (the app's own mainnet hot-wallet cap), and refuses bonds above 0.10 PUSD.
 - Every broadcast prints its outputs (amounts, PUSD, addresses) and waits for `y`. Anything else, or stdin running out, is a no and nothing is sent. `--yes` turns the prompt off and says so.
 - Separate `MAINNET_*` keys; a testnet key is refused on a mainnet run. `sweep` sends whatever is left on the throwaway keys back to your own wallet, refuses to "sweep" into one of those keys, and sends PUSD only to a token-aware (`bitcoincash:z...`) address so a wallet without CashTokens support cannot burn it.
 - The runner checks the Electrum server's block height against the network before anything else.
