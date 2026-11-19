@@ -47,6 +47,20 @@ function ActiveNav({ items }: { items: NavItem[] }) {
   return <NavLinks items={items} active={usePathname()} />;
 }
 
+/** The other deployment: mainnet links to the play-money copy, the play copy links back. */
+function OtherSiteLink() {
+  const c = useConfig();
+  if (!c) return null;
+  const href = c.network === 'mainnet' ? c.links.play : c.network === 'mocknet' ? c.links.live : null;
+  if (!href) return null;
+  const label = c.network === 'mainnet' ? 'Try with play money' : 'Real money (mainnet)';
+  return (
+    <a className="hidden text-sm text-[var(--muted)] underline-offset-4 hover:text-[var(--foreground)] hover:underline md:inline" href={href}>
+      {label} ↗
+    </a>
+  );
+}
+
 export default function Header() {
   const c = useConfig();
   const items: NavItem[] = [
@@ -63,6 +77,7 @@ export default function Header() {
           <ActiveNav items={items} />
         </Suspense>
         <div className="ml-auto flex items-center gap-2">
+          <OtherSiteLink />
           <span className="hidden sm:inline">
             <NetworkBadge />
           </span>

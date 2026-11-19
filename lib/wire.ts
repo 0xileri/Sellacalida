@@ -13,7 +13,8 @@ export interface PublicConfig {
   tokenDecimals: number;
   escrowSats: string;
   featuredAgentId: string;
-  links: { deck: string | null; repo: string; emberAddress: string | null };
+  /** play: the mocknet (play money) site, shown on mainnet; live: the mainnet site, shown on the play site */
+  links: { deck: string | null; repo: string; emberAddress: string | null; play: string | null; live: string | null };
 }
 
 export interface OfferParamsWire {

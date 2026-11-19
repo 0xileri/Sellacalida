@@ -13,6 +13,7 @@
     "test:watch": "vitest",
     "chipnet": "tsx scripts/chipnet/run.mts",
     "mainnet": "tsx scripts/chipnet/run.mts --network mainnet",
+    "keys": "tsx scripts/keys.mts",
     "reproduce": "tsx scripts/reproduce.mts",
     "agent:try": "tsx scripts/agent-try.mts"
   },

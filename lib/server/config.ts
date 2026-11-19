@@ -23,7 +23,7 @@ export interface ServerConfig {
   autoOffers: number;
   /** mocknet preview only: anyone may run play challenges through the dev challenger, rate limited */
   publicDevChallenges: { enabled: boolean; minIntervalMs: number; maxPerProcess: number };
-  links: { deck: string | null; repo: string; emberAddress: string | null };
+  links: { deck: string | null; repo: string; emberAddress: string | null; play: string | null; live: string | null };
 }
 
 function int(env: Record<string, string | undefined>, key: string, fallback: bigint): bigint {
@@ -34,6 +34,12 @@ function int(env: Record<string, string | undefined>, key: string, fallback: big
 }
 
 const NETWORKS: readonly string[] = ['mainnet', 'chipnet', 'mocknet'];
+
+/** An https URL or nothing: a typo in a link variable leaves the link out instead of breaking it. */
+function httpsUrl(v: string | undefined): string | null {
+  const s = (v ?? '').trim().replace(/\/+$/, '');
+  return /^https:\/\/[^\s/]+(\/\S*)?$/.test(s) ? s : null;
+}
 
 /**
  * A WIF says which network it was made for; refuse a testnet key on mainnet and the reverse, as the
@@ -115,6 +121,9 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
       deck: env.NEXT_PUBLIC_DECK_URL || null,
       repo: env.NEXT_PUBLIC_REPO_URL || 'https://github.com/0xileri/Sellacalida',
       emberAddress: env.NEXT_PUBLIC_EMBER_ADDRESS || null,
+      // the two deployments link to each other: mainnet (real PUSD) and a mocknet play-money copy
+      play: httpsUrl(env.PLAY_URL),
+      live: httpsUrl(env.LIVE_URL),
     },
   };
 }
