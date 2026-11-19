@@ -6,7 +6,7 @@ import { p2pkhLockingBytecode } from '@/lib/bch/transactions';
 import { PUSD_CATEGORY_MAINNET } from '@/lib/constants';
 import {
   MAINNET_AMOUNTS, checkMainnetCaps, confirmingProvider, describeTx, finishPending, genesis, parseSweepDestination,
-  scenarioCancel, scenarioFail, scenarioPass, scenarioStartShort, seedMocknet, sweep,
+  reclaimOffers, scenarioCancel, scenarioFail, scenarioPass, scenarioStartShort, seedMocknet, sweep,
   type FlowContext, type Key,
 } from '../scripts/chipnet/flows';
 import { encodeCashAddress } from '@bitauth/libauth';
@@ -222,5 +222,32 @@ describe('mainnet runner: sweep destination', () => {
     // BCH alone may go to a plain address
     const bchOnly = mockCtx();
     expect(await sweep(bchOnly.ctx, [bchOnly.agent], { lock: mine.lock, tokenAware: false })).toMatch(/^[0-9a-f]{64}$/);
+  });
+});
+
+describe('mainnet runner: reclaim a bond left behind by a stopped run', () => {
+  it('a run stopped after "fund offer" leaves the bond in the offer; reclaim cancels it back to the agent', async () => {
+    const { ctx, provider, agent } = mockCtx({ amounts: MAINNET_AMOUNTS, category: PUSD_CATEGORY_MAINNET });
+    givePusd(provider, agent, 100n);
+    const agentTokens = async () =>
+      (await provider.getUtxosForLockingBytecode(agent.lock)).reduce((a, u) => a + (u.token?.amount ?? 0n), 0n);
+
+    // what happened on 17 Nov: "pass" broadcast its fund tx, then stopped before the accept
+    let n = 0;
+    ctx.provider = confirmingProvider(provider, 'mainnet', async () => n++ === 0, () => {});
+    await expect(scenarioPass(ctx)).rejects.toThrow(/broadcast declined/);
+    // and the same for a short-window offer (noresponse / timeout)
+    n = 0;
+    await expect(scenarioStartShort(ctx, 'timeout')).rejects.toThrow(/broadcast declined/);
+    expect(await agentTokens()).toBe(100n - 6n - 7n); // two bonds stuck in offers, two fees at the challenger
+
+    ctx.provider = provider;
+    const txids = await reclaimOffers(ctx);
+    expect(txids).toHaveLength(2);
+    expect(await agentTokens()).toBe(100n - 1n - 2n); // both bonds back; the challenger's tokens come back with sweep
+    expect(ctx.results.filter((r) => r.scenario === 'reclaim').map((r) => r.step)).toEqual([
+      'cancel a leftover offer', 'cancel a leftover offer',
+    ]);
+    expect(await reclaimOffers(ctx)).toEqual([]); // nothing left
   });
 });

@@ -7,6 +7,7 @@
 //   npm run chipnet -- all               cancel, pass, fail, then start noresponse + timeout
 //   npm run chipnet -- cancel|pass|fail|noresponse|timeout
 //   npm run chipnet -- pending [--wait]  finish NORESPONSE (after 1 block) and timeout (after 19 blocks)
+//   npm run chipnet -- reclaim           cancel any bond left in an offer contract by a stopped run
 //   npm run chipnet -- sweep <address>   send everything the throwaway keys hold to your own wallet
 //
 //   npm run mainnet -- <same commands>   the same on mainnet with real PUSD (no genesis): bonds of
@@ -31,7 +32,7 @@ import { p2pkhLockingBytecode } from '../../lib/bch/transactions';
 import { PUSD_CATEGORY_MAINNET, type SellacalidaNetwork } from '../../lib/constants';
 import {
   CHIPNET_AMOUNTS, MAINNET_AMOUNTS, checkMainnetCaps, confirmingProvider, finishPending, genesis, parseSweepDestination,
-  scenarioCancel, scenarioFail, scenarioPass, scenarioStartShort, seedMocknet, sweep,
+  reclaimOffers, scenarioCancel, scenarioFail, scenarioPass, scenarioStartShort, seedMocknet, sweep,
   type FlowContext, type Key, type PendingEscrow, type StepResult,
 } from './flows';
 
@@ -247,7 +248,7 @@ async function main() {
     },
   };
 
-  const spends = ['all', 'cancel', 'pass', 'fail', 'noresponse', 'timeout', 'pending'].includes(command);
+  const spends = ['all', 'cancel', 'pass', 'fail', 'noresponse', 'timeout', 'pending', 'reclaim'].includes(command);
   if (mainnet && spends) await checkMainnetCaps(ctx);
 
   const state = loadState();
@@ -288,6 +289,9 @@ async function main() {
         state.pending.push(await scenarioStartShort(ctx, 'timeout'));
         break;
       case 'pending':
+        break;
+      case 'reclaim':
+        await reclaimOffers(ctx);
         break;
       case 'sweep': {
         const to = positional[1];

@@ -253,6 +253,34 @@ export async function scenarioCancel(ctx: FlowContext) {
   record(ctx, 'cancel', 'cancel (agent checkSig)', (await b.send()).txid);
 }
 
+/**
+ * Cancel any bond still sitting in this runner's offer contracts (the normal and the short-window
+ * terms) back to the agent, for example after a run stopped between "fund offer" and "accept".
+ * Only coins holding exactly the bond in the bond token can take the cancel path; others are listed
+ * and left alone. Returns the cancel txids.
+ */
+export async function reclaimOffers(ctx: FlowContext): Promise<string[]> {
+  const txids: string[] = [];
+  for (const short of [false, true]) {
+    const offer = offerParams(ctx, short);
+    const offerContract = makeOfferContract(offer, ctx.provider);
+    for (const u of await offerContract.getUtxos()) {
+      if (u.token?.category !== offer.tokenCategory || u.token.amount !== offer.bondAmount || u.token.nft) {
+        ctx.log(`  reclaim     skipping ${u.txid}:${u.vout} (${u.satoshis} sats, not exactly the bond)`);
+        continue;
+      }
+      const b = buildCancel({
+        provider: ctx.provider, offer, offerContract, offerUtxo: u, agentPk: ctx.agent.pk, agentSig: ctx.agent.template,
+      });
+      const txid = (await b.send()).txid;
+      record(ctx, 'reclaim', 'cancel a leftover offer', txid, `was ${u.txid.slice(0, 12)}...:${u.vout}`);
+      txids.push(txid);
+    }
+  }
+  if (txids.length === 0) ctx.log('  reclaim     no leftover offers');
+  return txids;
+}
+
 export interface PendingEscrow {
   scenario: string;
   kind: 'noresponse' | 'timeout';

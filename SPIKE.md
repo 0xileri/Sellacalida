@@ -9,7 +9,7 @@ Spec: `SELLACALIDA_SPEC.md` section 11. Gate date: 16 November 2026 (WAT).
 | Contracts on mocknet | **Green.** Full vitest suite, `npm test`. |
 | Spike flows with a simulated wallet | **Green on mocknet.** `tests/spikeFlows.test.ts` signs every `/connect` flow with a mock WizardConnect wallet (fills P2PKH and contract placeholders the way Paytaca is documented to). This is not a real wallet result. |
 | Chipnet runs | **Skipped (decision below).** Keys were generated and the dry run passed on 13 Nov, but no chipnet faucet paid out by 16 Nov, so the agent was never funded. |
-| Mainnet run (replaces chipnet) | **In progress: 2 of 15 broadcast (cancel done).** Capped mainnet mode of the same runner: `npm run mainnet -- ...`, PUSD bonds of 0.05, a y/N prompt before every broadcast. Agent funded on 17 Nov with 501,000 sats and 1.00 PUSD (inside the 1,000,000-sat / 20 PUSD cap). Dry-run and rehearsed (prompts included) on mocknet; `tests/chipnetFlows.test.ts`. Txids go in the step table below as each one lands. |
+| Mainnet run (replaces chipnet) | **In progress: 5 of 15 broadcast (cancel and pass done).** Capped mainnet mode of the same runner: `npm run mainnet -- ...`, PUSD bonds of 0.05, a y/N prompt before every broadcast. Agent funded on 17 Nov with 501,000 sats and 1.00 PUSD (inside the 1,000,000-sat / 20 PUSD cap). Dry-run and rehearsed (prompts included) on mocknet; `tests/chipnetFlows.test.ts`. Txids go in the step table below as each one lands. |
 | Real wallets (Paytaca, Selene) | **Not run yet.** Needs a phone or browser wallet. Fill in the tables below. |
 | Funding path decision | **Pending the real-wallet rows.** Default plan: test token / PUSD through WizardConnect. Fallbacks in order: the other wallet, an XO template for the token send, then BCH-only bonds. |
 
@@ -44,6 +44,7 @@ npm run mainnet -- fail              # 3 txs: fund offer, accept (change 2), set
 npm run mainnet -- noresponse        # 2 txs: fund offer, accept; then wait 1 block
 npm run mainnet -- timeout           # 2 txs: fund offer, accept; then wait 19 blocks
 npm run mainnet -- pending           # settles NORESPONSE once it can, refunds the timeout once it can
+npm run mainnet -- reclaim           # only if a run stopped between fund and accept: cancels the stranded bond
 npm run mainnet -- sweep bitcoincash:z...   # your own token-aware address: everything left comes back
 ```
 
@@ -100,9 +101,9 @@ Filled in as each broadcast lands. Explorer: explorer.bch.ninja.
 | --- | --- | --- | --- | --- |
 | 1 | cancel | fund offer (bond into the offer P2SH32) | [2e9a10e893…](https://explorer.bch.ninja/tx/2e9a10e8930401bc1f4a23fe605c98ae8ee645a108fba4e10b932243dfe7ba0e) | Broadcast 17 Nov. 474 B, 2 in / 3 out: 5 PUSD + 3,000 sats into the offer `bitcoincash:pds8kexq…a0gp`, 95 PUSD and 496,476 sats change to the agent. |
 | 2 | cancel | cancel (agent checkSig) | [e3e8d2fbff…](https://explorer.bch.ninja/tx/e3e8d2fbffaa09abfd0d8ec6ace4943a44c503e5b85fc2dcdcba2140da8830fa) | Broadcast 17 Nov. 1,174 B, 1 in / 1 out: the agent's checkSig path of the covenant; the 5 PUSD bond and 1,706 sats back to the agent. First real-chain covenant spend. |
-| 3 | pass | fund offer | | |
-| 4 | pass | accept (exact) | | |
-| 5 | pass | settle PASS (1-output) | | |
+| 3 | pass | fund offer | [a332da328f…](https://explorer.bch.ninja/tx/a332da328fce56526911229d6e1db9453d9a6918464ee8ed99e423386cfac4b9) | Broadcast 17 Nov. 543 B, 2 in / 4 out: 5 PUSD + 3,000 sats into the same offer `bitcoincash:pds8kexq…a0gp`, 1 PUSD + 4,000 sats to the challenger. |
+| 4 | pass | accept (exact) | [5777c9dd6e…](https://explorer.bch.ninja/tx/5777c9dd6e753dcac57f5c41b46e4e346f77b64e59f09812b5d9efb96106744e) | Broadcast 17 Nov. 1,974 B, 2 in / 2 out: escrow `bitcoincash:p04grlhd…w982` gets 6 PUSD + 3,000 sats; 1,826 sats token-free change to the challenger. Expiry 978097. |
+| 5 | pass | settle PASS (1-output) | [cebc678bf3…](https://explorer.bch.ninja/tx/cebc678bf3c40b353963a736d9d2ff4cf04feefec91d556a96a70e7a3cbf5d26) | Broadcast 17 Nov. 968 B, 1 in / 1 out: verifier attestation checked with checkDataSig on chain; bond + fee (6 PUSD) and 1,933 sats to the agent. |
 | 6 | fail | fund offer | | |
 | 7 | fail | accept (change 2) | | |
 | 8 | fail | settle FAIL (2-output, fee input) | | |
@@ -113,6 +114,7 @@ Filled in as each broadcast lands. Explorer: explorer.bch.ninja.
 | 13 | timeout | accept (change 1) | | |
 | 14 | timeout | timeout refund (after 19 blocks) | | |
 | 15 | sweep | sweep to your own wallet | | |
+| R | reclaim | cancel a bond left in the offer by a stopped run (`npm run mainnet -- reclaim`) | | |
 
 ## Chipnet txids (paste from `data/chipnet-results.md`)
 
