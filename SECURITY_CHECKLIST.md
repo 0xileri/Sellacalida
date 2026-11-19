@@ -4,7 +4,7 @@ Every item from `SELLACALIDA_SPEC.md` section 9, word for word, with the tests t
 
 Run them all with `npm test`. Contract tests run the real compiled covenants in the CashScript mocknet VM (BCH 2026 rules) with transaction validation on.
 
-Status: **42 of 43 proven by tests.** The open item needs real-chain txids from the capped mainnet run.
+Status: **43 of 43 proven by tests.** The last one is also proven on a real chain: every transaction type relayed on mainnet (`SPIKE.md`).
 
 ## Encoding and categories
 
@@ -206,11 +206,11 @@ Status: **42 of 43 proven by tests.** The open item needs real-chain txids from 
   - `tests/server.test.ts` › "a key made for the other network is refused (WIFs carry their network)"
   - `tests/server.test.ts` › "NETWORK is matched against an explicit list: object property names are not networks"
   - Note: The Electrum check is a height test: mainnet is above 800,000 and chipnet far below, so a server on the wrong network stops the verifier loop and offer publishing. The runner also refuses a testnet key on a mainnet run.
-- [ ] Dust and fee sufficiency: transactions still relay.
+- [x] Dust and fee sufficiency: transactions still relay.
   - `tests/guards.test.ts` › "MIN_OUTPUT_SATS covers a token-bearing P2PKH output"
   - `tests/guards.test.ts` › "MIN_OUTPUT_SATS covers a token-bearing P2SH32 escrow output"
   - `tests/chipnetFlows.test.ts` › "every scenario works with cent-sized PUSD bonds, and a sweep empties the throwaway keys"
-  - Pending: "Still relay" needs real txids. The dust floors and the VM accept every transaction, but only a real node shows relay. Pending the capped mainnet run in `SPIKE.md`; paste the txids there and tick this.
+  - Note: Relayed on mainnet on 17 and 19 Nov: every transaction type (fund, cancel, accept exact and with change, settle PASS, settle FAIL with a fee input, NORESPONSE, timeout refund, sweep), 17 in all, at 1.1 sat/byte with 1,000-sat token outputs. Txids in `SPIKE.md`.
 - [x] A failed checker does not produce a signature.
   - `tests/verifier.test.ts` › "a checker failure signs nothing and does not turn into NORESPONSE"
 

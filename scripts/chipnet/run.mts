@@ -169,7 +169,9 @@ function startReader() {
 /** y / yes broadcasts; anything else, or no input left, is a no. */
 function ask(question: string): Promise<boolean> {
   startReader();
-  process.stdout.write(question);
+  // the reader's own prompt, so a redraw while typing (backspace) keeps the question on screen
+  reader!.setPrompt(question);
+  reader!.prompt(true);
   return new Promise((resolve) => {
     const done = (line: string | null) => {
       if (line === null) process.stdout.write('(no input: treated as no)\n');

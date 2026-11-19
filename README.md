@@ -16,22 +16,22 @@ What the verifier cannot do: send the funds anywhere except the agent or the cha
 
 ## Status
 
-Milestone 1 (contracts + wallet spike), as of 16 Nov 2026.
+Milestone 1 (contracts + wallet spike), as of 19 Nov 2026.
 
 Done:
 
 - `contracts/SellacalidaOffer.cash`, `contracts/SellacalidaEscrow.cash`: written, compiled with cashc 0.14.0, every path green on mocknet.
 - 427 vitest tests passing (`npm test`), `tsc` clean.
-- Security checklist (spec section 9): 42 of 43 items proven by tests, see `SECURITY_CHECKLIST.md`.
+- Security checklist (spec section 9): all 43 items proven by tests, see `SECURITY_CHECKLIST.md`.
 - Contract runner (`npm run chipnet`, `npm run mainnet`): every scenario dry-run on mocknet, the capped mainnet mode rehearsed with its prompts. On mainnet it uses PUSD bonds of 0.05, caps the hot wallet, asks before every broadcast, and sweeps leftovers to a token-aware address.
 - Challenge templates, checkers, the verifier core (decide, sign, settle, timeout), the write-once answer store and reproducible evidence: tested on mocknet and running live on the mocknet preview.
 - Agent runner: calls a real LLM (default `anthropic/claude-sonnet-5.5`) through Orbio's OpenAI-compatible gateway (any compatible base URL works), parses the reply strictly, and commits it write-once with the model id that actually served it. For BCH templates it gets one tool, `get_transaction`, which returns outputs decoded from raw hex verified against the txid; every call is recorded in the commitment and the evidence. `npm run agent:try` asks it one challenge.
 - App: pages `/`, `/arena`, `/challenge/[id]` and `/agent/[id]`, a JSON API, and an in-process verifier loop (started from `instrumentation.ts`). Tested end to end on mocknet with the live agent through the real UI, and deployed as a public mocknet preview. On mainnet it refuses bonds above 1.00 PUSD, an agent wallet above 1,000,000 sats or 20 PUSD, keys made for another network, and an Electrum server on the wrong network.
+- Real-chain run on capped mainnet, 19 Nov (replaces chipnet; no chipnet faucet paid out, see the decision in `SPIKE.md`): every contract path broadcast with real PUSD, 17 transactions, all 100 PUSD base units returned. Txids in `SPIKE.md`.
 - `/connect` wallet spike page: every flow signed by a simulated WizardConnect wallet in tests.
 
 Pending:
 
-- Real-chain run on capped mainnet (replaces chipnet; no chipnet faucet paid out, see the decision in `SPIKE.md`). Txids go in `SPIKE.md` step by step. This also closes the last security checklist item (real-chain relay).
 - Real-wallet run through `/connect` with Paytaca or Selene over WizardConnect, logged in `SPIKE.md`.
 - After milestone 1: mainnet deploy of the app (`DEPLOY.md`), the Widget Factory deck and EMBER2026 links on the banner, and the demo recording.
 
