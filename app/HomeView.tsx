@@ -21,6 +21,12 @@ function Banner() {
         <a className="underline underline-offset-4" href={c?.links.repo ?? 'https://github.com/0xileri/Sellacalida'} target="_blank" rel="noreferrer">
           Source on GitHub
         </a>
+        {c?.network === 'mainnet' && c.links.play ? (
+          <a className="underline underline-offset-4" href={c.links.play}>Try it with play money, no wallet needed</a>
+        ) : null}
+        {c?.network === 'mocknet' && c.links.live ? (
+          <a className="underline underline-offset-4" href={c.links.live}>This is play money. The real-money version is on mainnet</a>
+        ) : null}
         <span className="flex min-w-0 items-center gap-2">
           <span className="text-[var(--muted)]">EMBER2026 votes:</span>
           {c?.links.emberAddress ? <CopyText text={c.links.emberAddress} /> : <span className="text-[var(--muted)]">address coming soon</span>}

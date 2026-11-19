@@ -2,26 +2,54 @@
 
 The app is one long-running Node process (`next build` then `next start`). It holds the JSON store and runs the verifier loop in-process, so it must not run as serverless functions or with more than one replica.
 
-## Current deployment: Railway, mocknet preview
+## Current deployment: Railway, two services
 
-- Project `sellacalida`, service `web`, deploys from `main` on every push.
-- Builder: Railpack (Node from `package.json` `engines`), `npm install`, `npm run build`, `npm run start`.
-- Health check: `GET /api/config`. Restart policy: on failure, 5 retries.
+Project `sellacalida`, both services deploy from `main` on every push (Railpack: Node from `package.json` `engines`, `npm install`, `npm run build`, `npm run start`; health check `GET /api/config`; restart on failure, 5 retries).
 
-| Variable | Value | Why |
+| Service | Network | What it is |
 | --- | --- | --- |
-| `NETWORK` | `mocknet` | in-memory chain with play money; resets on every restart |
-| `MOCKNET_PUBLIC_CHALLENGES` | `1` | visitors can run play challenges through a throwaway challenger key |
-| `MOCKNET_CHALLENGE_INTERVAL_MS` | `15000` | one play challenge at a time across all visitors |
-| `MOCKNET_CHALLENGE_CAP` | `200` | per process, bounds LLM spend between restarts |
-| `AUTO_OFFERS` | `3` | the agent keeps three bonds open |
-| `VERIFIER_TICK_MS` | `5000` | verifier pass interval |
-| `LLM_BASE_URL`, `LLM_MODEL_ID` | Orbio, `anthropic/claude-sonnet-5.5` | the live agent |
-| `LLM_API_KEY` | **set by you in the Railway dashboard** | without it the agent is offline and play challenges never get an answer |
-| `ADMIN_TOKEN` | random, in the Railway dashboard | guards `/api/admin/*` (publish / cancel bonds, force a verifier pass) |
-| `NEXT_PUBLIC_REPO_URL` | the GitHub repo | home-page banner |
+| `web` | **mainnet** | The real thing: PUSD bonds, WizardConnect accepts, verifier-signed settles. The submission link. |
+| `play` | mocknet | Play money, no wallet needed: visitors run challenges through a throwaway challenger key. Resets on every restart. |
 
-Still to set when you have them: `NEXT_PUBLIC_DECK_URL` (Widget Factory deck) and `NEXT_PUBLIC_EMBER_ADDRESS` (CashTokens address for EMBER2026 votes).
+Each links to the other (`PLAY_URL` on `web`, `LIVE_URL` on `play`), in the header and the home banner.
+
+### `web` (mainnet)
+
+1. On your machine, make fresh keys: `npm run keys` (Windows: `npm.cmd run keys`). It prints them once and saves nothing.
+2. Paste `AGENT_WIF`, `VERIFIER_PRIVATE_KEY` and `FEE_WALLET_WIF` into Railway > `web` > Variables. Never into a chat or a commit.
+3. Fund the agent's `bitcoincash:z...` address with a little PUSD and BCH (about 2 PUSD and 100,000 sats), and the fee wallet with about 20,000 sats.
+4. A volume mounted at `/app/data`, so offers, challenges and answers survive restarts.
+
+| Variable | Value |
+| --- | --- |
+| `NETWORK` | `mainnet` (token forced to PUSD mainnet-v1, 2 decimals) |
+| `DATA_DIR` | `/app/data` |
+| `AGENT_WIF`, `VERIFIER_PRIVATE_KEY`, `FEE_WALLET_WIF` | from `npm run keys`, pasted by you |
+| `OFFER_BOND`, `OFFER_FEE` | `100`, `20` (1.00 / 0.20 PUSD, the spec's demo size; 100 is the mainnet cap) |
+| `AUTO_OFFERS` | `1` |
+| `VERIFIER_TICK_MS` | `20000` |
+| `LLM_BASE_URL`, `LLM_MODEL_ID`, `LLM_API_KEY` | Orbio, `anthropic/claude-sonnet-5.5`, your key |
+| `ADMIN_TOKEN` | random; guards `/api/admin/*` |
+| `PLAY_URL` | the `play` service's URL |
+| `NEXT_PUBLIC_REPO_URL`, `NEXT_PUBLIC_DECK_URL`, `NEXT_PUBLIC_EMBER_ADDRESS` | home-page banner |
+
+On mainnet the app refuses bonds above 1.00 PUSD, refuses to publish while the agent holds more than 1,000,000 sats or 20 PUSD, refuses keys made for another network, and stops the verifier loop if the Electrum server is on the wrong network.
+
+### `play` (mocknet)
+
+| Variable | Value |
+| --- | --- |
+| `NETWORK` | `mocknet` |
+| `MOCKNET_PUBLIC_CHALLENGES` | `1` |
+| `MOCKNET_CHALLENGE_INTERVAL_MS`, `MOCKNET_CHALLENGE_CAP` | `15000`, `200` (bounds LLM spend between restarts) |
+| `AUTO_OFFERS` | `3` |
+| `VERIFIER_TICK_MS` | `5000` |
+| `LLM_BASE_URL`, `LLM_MODEL_ID` | as on `web` |
+| `LLM_API_KEY` | `${{web.LLM_API_KEY}}` (a Railway reference, so the key lives in one place) |
+| `ADMIN_TOKEN` | its own random value |
+| `LIVE_URL` | the `web` service's URL |
+
+No `AGENT_WIF`, `VERIFIER_PRIVATE_KEY` or `FEE_WALLET_WIF` here: mocknet uses built-in play keys.
 
 ## Switching to chipnet
 

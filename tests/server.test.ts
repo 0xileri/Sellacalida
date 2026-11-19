@@ -71,6 +71,15 @@ describe('config guards', () => {
     expect(loadConfig({ NETWORK: 'mocknet', AGENT_WIF: main }).agent.wif).toBe(main); // play money takes either
   });
 
+  it('play and live links take only https URLs, so a typo leaves the link out', () => {
+    expect(loadConfig({ NETWORK: 'mocknet', LIVE_URL: 'https://sellacalida.example/', PLAY_URL: 'https://play.example' }).links)
+      .toMatchObject({ live: 'https://sellacalida.example', play: 'https://play.example' });
+    for (const bad of ['http://plain.example', 'javascript:alert(1)', 'play.example', 'https://two words']) {
+      expect(loadConfig({ NETWORK: 'mocknet', PLAY_URL: bad }).links.play, bad).toBeNull();
+    }
+    expect(loadConfig({ NETWORK: 'mocknet' }).links).toMatchObject({ play: null, live: null });
+  });
+
   it('on mainnet amounts always display as PUSD with 2 decimals', () => {
     expect(loadConfig({ NETWORK: 'mainnet' })).toMatchObject({ tokenSymbol: 'PUSD', tokenDecimals: 2 });
     expect(loadConfig({ NETWORK: 'mainnet', TOKEN_SYMBOL: 'PUSD', TOKEN_DECIMALS: '2' })).toMatchObject({ tokenSymbol: 'PUSD', tokenDecimals: 2 });
