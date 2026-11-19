@@ -40,9 +40,10 @@ function realMnemonics(text: string): string[] {
 }
 
 // an env-style assignment of a secret with a value on the same line. ".env.example" has names only;
-// the spec's "<never commit>" placeholders start with "<" and are not values.
+// the spec's "<never commit>" placeholders start with "<", and template or shell references such as
+// `AGENT_WIF=${k.AGENT_WIF}` (scripts/keys.mts) start with "$"; neither is a value.
 const SECRET_NAMES = 'AGENT_WIF|VERIFIER_PRIVATE_KEY|FEE_WALLET_WIF|LLM_API_KEY|ADMIN_TOKEN|(?:CHIPNET|MAINNET)_[A-Z_]+_WIF';
-const SECRET_ASSIGNMENT = new RegExp(`^[ \\t]*(?:export[ \\t]+)?(${SECRET_NAMES})[ \\t]*=[ \\t]*[^\\s#<]`, 'm');
+const SECRET_ASSIGNMENT = new RegExp(`^[ \\t]*(?:export[ \\t]+)?(${SECRET_NAMES})[ \\t]*=[ \\t]*[^\\s#<$]`, 'm');
 
 const TEXT = /\.(ts|tsx|mts|js|mjs|cjs|json|md|cash|css|txt|yml|yaml|toml|example|gitignore|html)$|^[^.]+$/;
 
@@ -84,6 +85,8 @@ describe('no private keys in the repo or its history', () => {
     expect(SECRET_ASSIGNMENT.test('VERIFIER_PRIVATE_KEY=abcd')).toBe(true);
     expect(SECRET_ASSIGNMENT.test('VERIFIER_PRIVATE_KEY=\nNEXT=1')).toBe(false);
     expect(SECRET_ASSIGNMENT.test('LLM_API_KEY=<never commit>')).toBe(false);
+    expect(SECRET_ASSIGNMENT.test('  AGENT_WIF=${k.AGENT_WIF}')).toBe(false);
+    expect(SECRET_ASSIGNMENT.test('  AGENT_WIF=L1realLookingValue')).toBe(true);
   });
 
   it('no commit in the history ever contained a valid WIF', () => {

@@ -4,6 +4,8 @@
 
 BCH BLAZE 2026, mainnet track. Solo build by [0xileri](https://github.com/0xileri).
 
+**Live (mainnet, real PUSD):** https://sellacalida.up.railway.app · **Play money, no wallet needed:** https://web-production-20dba597.up.railway.app
+
 An AI agent locks a bond (PUSD, or a chipnet test token) in a CashScript offer covenant. A challenger accepts in a single transaction from their own wallet, adding a fee and a parameterized, objectively checkable challenge. A verifier runs a deterministic test and signs pass, fail or no-response. The escrow contract pays the agent on pass, pays the challenger on fail or no-response, and refunds both sides if no attestation arrives before the block-height deadline.
 
 The full design is in [`SELLACALIDA_SPEC.md`](./SELLACALIDA_SPEC.md). Wallet spike results go in [`SPIKE.md`](./SPIKE.md). The spec's security checklist, item by item with the tests that prove each one, is [`SECURITY_CHECKLIST.md`](./SECURITY_CHECKLIST.md).
@@ -34,7 +36,8 @@ Done:
 Pending:
 
 - Refund the wallet spike's escrow after height 978185 (Refund on `/connect`, same browser). Selene not tried.
-- After milestone 1: mainnet deploy of the app (`DEPLOY.md`), the Widget Factory deck and EMBER2026 links on the banner, and the demo recording.
+- Mainnet app: deployed on 19 Nov at https://sellacalida.up.railway.app (0.50 PUSD bonds, 0.10 fee; storage volume; play-money copy linked). Waiting on the agent's PUSD to post its first live bond, then a real PASS, a real FAIL and a BCH tip through the UI.
+- The Widget Factory deck and EMBER2026 links on the banner, and the demo recording.
 
 ## Layout
 
