@@ -7,30 +7,32 @@
 //   npm run chipnet -- all               cancel, pass, fail, then start noresponse + timeout
 //   npm run chipnet -- cancel|pass|fail|noresponse|timeout
 //   npm run chipnet -- pending [--wait]  finish NORESPONSE (after 1 block) and timeout (after 19 blocks)
+//   npm run chipnet -- reclaim           cancel any bond left in an offer contract by a stopped run
 //   npm run chipnet -- sweep <address>   send everything the throwaway keys hold to your own wallet
 //
 //   npm run mainnet -- <same commands>   the same on mainnet with real PUSD (no genesis): bonds of
 //                                        0.05 PUSD, hot-wallet caps, and a y/N prompt before every
 //                                        broadcast (add --yes to skip the prompts)
 //
-//   add --network mocknet to dry-run every step in memory (no keys, no internet).
+//   add --network mocknet to dry-run every step in memory (no keys, no internet); add
+//   --mainnet-amounts --confirm to rehearse a mainnet step, prompts included, with play money.
 //
 // Writes data/<network>-state.json (pending escrows) and data/<network>-results.{json,md} (txids for SPIKE.md).
 import { existsSync, mkdirSync, readFileSync, writeFileSync, appendFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { createInterface } from 'node:readline/promises';
+import { createInterface } from 'node:readline';
 import {
-  binToHex, cashAddressToLockingBytecode, decodePrivateKeyWif, encodePrivateKeyWif, generatePrivateKey, hash160, secp256k1,
+  binToHex, decodePrivateKeyWif, encodePrivateKeyWif, generatePrivateKey, hash160, secp256k1,
 } from '@bitauth/libauth';
-import { MockNetworkProvider, SignatureTemplate, type NetworkProvider } from 'cashscript';
+import { MockNetworkProvider, SignatureTemplate } from 'cashscript';
 import { assertChainMatchesNetwork, makeProvider } from '../../lib/bch/network';
 import { fromJson, toJson } from '../../lib/serialize';
 import { networkPrefix, pkhToCashAddress } from '../../lib/bch/address';
 import { p2pkhLockingBytecode } from '../../lib/bch/transactions';
 import { PUSD_CATEGORY_MAINNET, type SellacalidaNetwork } from '../../lib/constants';
 import {
-  CHIPNET_AMOUNTS, MAINNET_AMOUNTS, checkMainnetCaps, describeTx, finishPending, genesis, scenarioCancel,
-  scenarioFail, scenarioPass, scenarioStartShort, seedMocknet, sweep,
+  CHIPNET_AMOUNTS, MAINNET_AMOUNTS, checkMainnetCaps, confirmingProvider, finishPending, genesis, parseSweepDestination,
+  reclaimOffers, scenarioCancel, scenarioFail, scenarioPass, scenarioStartShort, seedMocknet, sweep, waitForHeight,
   type FlowContext, type Key, type PendingEscrow, type StepResult,
 } from './flows';
 
@@ -51,6 +53,7 @@ if (!['chipnet', 'mainnet', 'mocknet'].includes(network)) throw new Error(`unkno
 const command = positional[0] ?? 'status';
 const wait = flags.has('--wait');
 const assumeYes = flags.has('--yes');
+const rehearse = flags.has('--confirm');
 const mainnet = network === 'mainnet';
 
 const ROOT = process.cwd();
@@ -136,29 +139,48 @@ function saveResults(results: StepResult[]) {
 
 // ---- mainnet: ask before every broadcast ---------------------------------------------------------
 
-async function ask(question: string): Promise<boolean> {
-  const rl = createInterface({ input: process.stdin, output: process.stdout });
-  try {
-    return /^y(es)?$/i.test((await rl.question(question)).trim());
-  } finally {
-    rl.close();
-  }
+// One reader for the whole run, with a queue: piped answers that arrive before a prompt are kept,
+// and once stdin ends every further prompt is a "no" (never a hang, never a silent exit).
+const answers: string[] = [];
+let waiting: ((line: string | null) => void) | null = null;
+let inputEnded = false;
+let reader: ReturnType<typeof createInterface> | null = null;
+
+function startReader() {
+  if (reader) return;
+  reader = createInterface({ input: process.stdin, output: process.stdout, terminal: Boolean(process.stdin.isTTY) });
+  reader.on('line', (line) => {
+    if (waiting) {
+      const w = waiting;
+      waiting = null;
+      w(line);
+    } else answers.push(line);
+  });
+  reader.on('close', () => {
+    inputEnded = true;
+    if (waiting) {
+      const w = waiting;
+      waiting = null;
+      w(null);
+    }
+  });
 }
 
-/** Wraps a provider so every broadcast prints its outputs and waits for a "y". */
-function confirmingProvider(inner: NetworkProvider): NetworkProvider {
-  return new Proxy(inner, {
-    get(target, prop, receiver) {
-      if (prop === 'sendRawTransaction') {
-        return async (hex: string) => {
-          console.log(`\nAbout to broadcast on MAINNET:\n${describeTx(hex, network)}`);
-          if (!(await ask('Broadcast this transaction? [y/N] '))) throw new Error('broadcast declined; nothing was sent');
-          return target.sendRawTransaction(hex);
-        };
-      }
-      const v = Reflect.get(target, prop, receiver);
-      return typeof v === 'function' ? v.bind(target) : v;
-    },
+/** y / yes broadcasts; anything else, or no input left, is a no. */
+function ask(question: string): Promise<boolean> {
+  startReader();
+  // the reader's own prompt, so a redraw while typing (backspace) keeps the question on screen
+  reader!.setPrompt(question);
+  reader!.prompt(true);
+  return new Promise((resolve) => {
+    const done = (line: string | null) => {
+      if (line === null) process.stdout.write('(no input: treated as no)\n');
+      else if (!process.stdin.isTTY) process.stdout.write(`${line}\n`);
+      resolve(line !== null && /^y(es)?$/i.test(line.trim()));
+    };
+    if (answers.length) done(answers.shift()!);
+    else if (inputEnded) done(null);
+    else waiting = done;
   });
 }
 
@@ -186,7 +208,7 @@ async function main() {
     console.log(`  verifier pubkey ${binToHex(keys.VERIFIER.pk)}`);
     if (mainnet) {
       console.log('\nThese keys hold real money in a plaintext file. Keep the balance tiny: the runner refuses an agent');
-      console.log('holding more than 250,000 sats or 10 PUSD. When you are done, run "npm run mainnet -- sweep <your address>".');
+      console.log('holding more than 1,000,000 sats or 20 PUSD. When you are done, run "npm run mainnet -- sweep <your address>".');
     } else {
       console.log('\nThe full "all" run needs about 30,000 chipnet sats on the agent (several faucet drips).');
     }
@@ -200,7 +222,8 @@ async function main() {
     seedMocknet(raw, keys.AGENT);
   }
   await assertChainMatchesNetwork(raw, network);
-  const provider = mainnet && !assumeYes ? confirmingProvider(raw) : raw;
+  if (mainnet && assumeYes) console.log('--yes: mainnet broadcasts will NOT ask first');
+  const provider = (mainnet && !assumeYes) || rehearse ? confirmingProvider(raw, network, ask) : raw;
 
   const ctx: FlowContext = {
     network, provider,
@@ -214,20 +237,11 @@ async function main() {
         if ((await raw.getBlockHeight()) < h) raw.setBlockHeight(h);
         return true;
       }
-      for (;;) {
-        const now = await raw.getBlockHeight();
-        if (now >= h) return true;
-        if (!wait) {
-          console.log(`  height ${now} < ${h}: run "pending" again later (or add --wait)`);
-          return false;
-        }
-        console.log(`  height ${now}, waiting for ${h}...`);
-        await new Promise((r) => setTimeout(r, 60_000));
-      }
+      return waitForHeight(() => raw.getBlockHeight(), h, { wait, log: (l) => console.log(l) });
     },
   };
 
-  const spends = ['all', 'cancel', 'pass', 'fail', 'noresponse', 'timeout', 'pending'].includes(command);
+  const spends = ['all', 'cancel', 'pass', 'fail', 'noresponse', 'timeout', 'pending', 'reclaim'].includes(command);
   if (mainnet && spends) await checkMainnetCaps(ctx);
 
   const state = loadState();
@@ -269,14 +283,16 @@ async function main() {
         break;
       case 'pending':
         break;
+      case 'reclaim':
+        await reclaimOffers(ctx);
+        break;
       case 'sweep': {
         const to = positional[1];
         if (!to) throw new Error(`usage: sweep <your ${networkPrefix(network)}: address>`);
-        const decoded = cashAddressToLockingBytecode(to.includes(':') ? to : `${networkPrefix(network)}:${to}`);
-        if (typeof decoded === 'string') throw new Error(`not a CashAddress: ${decoded}`);
-        if (decoded.prefix !== networkPrefix(network)) throw new Error(`${to} is not a ${network} address`);
+        const own = [keys.AGENT, keys.CHALLENGER, keys.FEE_WALLET, keys.VERIFIER];
+        const dest = parseSweepDestination(to, network, own);
         if (state.pending.length) console.log(`  note: ${state.pending.length} escrow(s) still open; run "pending" first to get those back`);
-        await sweep(ctx, [keys.AGENT, keys.CHALLENGER, keys.FEE_WALLET], decoded.bytecode);
+        await sweep(ctx, [keys.AGENT, keys.CHALLENGER, keys.FEE_WALLET], dest);
         break;
       }
       default:

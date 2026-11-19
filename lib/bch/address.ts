@@ -39,6 +39,12 @@ export function lockingBytecodeToAddress(
   return r.address;
 }
 
+/** A typed or pasted address with the network prefix added when it was left off ("qzul..." works). */
+export function withNetworkPrefix(address: string, network: SellacalidaNetwork): string {
+  const a = address.trim();
+  return a.includes(':') ? a : `${networkPrefix(network)}:${a}`;
+}
+
 /** Accepts token-aware and non-token-aware encodings of the same payload. */
 export function addressToLockingBytecode(address: string): Uint8Array {
   const r = cashAddressToLockingBytecode(address);

@@ -8,7 +8,7 @@ import { hexToBin, sha256, utf8ToBin } from '@bitauth/libauth';
 import type { SpendableUtxo } from 'cashscript';
 import { PUSD_CATEGORY_MAINNET, type SellacalidaNetwork } from '@/lib/constants';
 import { makeOfferContract, type ChallengeTerms, type OfferParams } from '@/lib/contracts';
-import { addressToLockingBytecode } from '@/lib/bch/address';
+import { addressToLockingBytecode, withNetworkPrefix } from '@/lib/bch/address';
 import { explorerTxUrl, makeProvider } from '@/lib/bch/network';
 import {
   deriveAddresses, fetchWalletUtxos, signWithWallet, summarize, type WalletAddress, type WalletUtxo,
@@ -46,6 +46,16 @@ interface SavedEscrow {
 }
 
 const STORE_KEY = 'sellacalida-spike-v1';
+const NETWORK_KEY = 'sellacalida-spike-network';
+
+/** The network picked last time in this browser, so a reload does not fall back to chipnet. */
+function loadNetwork(): Net {
+  try {
+    return window.localStorage.getItem(NETWORK_KEY) === 'mainnet' ? 'mainnet' : 'chipnet';
+  } catch {
+    return 'chipnet';
+  }
+}
 
 function loadStore(): { offers: SavedOffer[]; escrows: SavedEscrow[] } {
   try {
@@ -84,11 +94,12 @@ function short(s: string, n = 8) {
 export default function ConnectSpike() {
   // the app-wide WizardConnect session (app/providers.tsx), which also renders the QR dialog
   const { wc } = useWallet();
-  const [network, setNetwork] = useState<Net>('chipnet');
-  const [category, setCategory] = useState(defaults.chipnet.category);
-  const [verifierPk, setVerifierPk] = useState(defaults.chipnet.verifierPk);
-  const [bond, setBond] = useState('100');
-  const [fee, setFee] = useState('20');
+  const [network, setNetwork] = useState<Net>(loadNetwork);
+  const [category, setCategory] = useState(() => defaults[loadNetwork()].category);
+  const [verifierPk, setVerifierPk] = useState(() => defaults[loadNetwork()].verifierPk);
+  // real PUSD on mainnet: cents, not dollars (spec section 8)
+  const [bond, setBond] = useState(() => (loadNetwork() === 'mainnet' ? '5' : '100'));
+  const [fee, setFee] = useState(() => (loadNetwork() === 'mainnet' ? '1' : '20'));
   const [tipTo, setTipTo] = useState('');
   const [tipSats, setTipSats] = useState('2000');
   const [addresses, setAddresses] = useState<WalletAddress[]>([]);
@@ -102,6 +113,11 @@ export default function ConnectSpike() {
   const provider = useMemo(() => makeProvider(network), [network]);
 
   function changeNetwork(next: Net) {
+    try {
+      window.localStorage.setItem(NETWORK_KEY, next);
+    } catch {
+      /* ignore */
+    }
     setNetwork(next);
     setCategory(defaults[next].category);
     setVerifierPk(defaults[next].verifierPk);
@@ -157,6 +173,22 @@ export default function ConnectSpike() {
     // only on connection changes, not on every refresh identity change
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wc.state, wc.manager]);
+
+  // switching networks clears the addresses; reload them for the new network straight away, so
+  // "Send bond" never runs against an empty list (19 Nov: "connect and refresh first")
+  useEffect(() => {
+    if (wc.state !== 'connected' || !wc.manager) return;
+    let cancelled = false;
+    void (async () => {
+      await Promise.resolve();
+      if (!cancelled) await refresh();
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // only when the network changes; the connect effect above covers new connections
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [network]);
 
   const receive0 = addresses.find((a) => a.path === 'receive' && a.index === 0);
   const change0 = addresses.find((a) => a.path === 'change' && a.index === 0) ?? receive0;
@@ -242,7 +274,7 @@ export default function ConnectSpike() {
     run('BCH tip (native send)', () => {
       if (!change0) throw new Error('connect first');
       return buildBchTip({
-        provider, walletUtxos: utxos, toLockingBytecode: addressToLockingBytecode(tipTo.trim()), amount: BigInt(tipSats), change: change0,
+        provider, walletUtxos: utxos, toLockingBytecode: addressToLockingBytecode(withNetworkPrefix(tipTo, network)), amount: BigInt(tipSats), change: change0,
       });
     });
 

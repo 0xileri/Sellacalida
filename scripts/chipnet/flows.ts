@@ -3,7 +3,7 @@
 // FAIL, NORESPONSE, and timeout. Every scenario funds itself from the agent key in one transaction.
 // Signing here uses local throwaway keys (SignatureTemplate); the WizardConnect wallet path is
 // exercised by /connect. On mainnet the bond token is PUSD and amounts are cents (MAINNET_AMOUNTS).
-import { binToHex, decodeTransaction, hexToBin, sha256, utf8ToBin } from '@bitauth/libauth';
+import { binToHex, cashAddressToLockingBytecode, decodeCashAddress, decodeTransaction, hexToBin, sha256, utf8ToBin } from '@bitauth/libauth';
 import {
   MockNetworkProvider,
   TransactionBuilder,
@@ -11,8 +11,10 @@ import {
   type SignatureTemplate,
   type SpendableUtxo,
 } from 'cashscript';
-import { MIN_OUTPUT_SATS, PUSD_CATEGORY_MAINNET, type SellacalidaNetwork, type Verdict } from '../../lib/constants';
-import { lockingBytecodeToAddress } from '../../lib/bch/address';
+import {
+  MAINNET_AGENT_MAX_SATS, MAINNET_AGENT_MAX_TOKENS, MIN_OUTPUT_SATS, PUSD_CATEGORY_MAINNET, type SellacalidaNetwork, type Verdict,
+} from '../../lib/constants';
+import { lockingBytecodeToAddress, networkPrefix } from '../../lib/bch/address';
 import { escrowArgsFor, makeEscrowContract, makeOfferContract, type ChallengeTerms, type OfferParams } from '../../lib/contracts';
 import { buildAccept, buildCancel, buildSettle, buildTimeout, p2pkhLockingBytecode, withFee } from '../../lib/bch/transactions';
 import { buildAttestation, sha256Utf8, signAttestation } from '../../lib/attestation';
@@ -71,11 +73,12 @@ export const CHIPNET_AMOUNTS: Amounts = { bond: BOND, fee: FEE, failChange: 35n,
 /** Mainnet uses real PUSD: a 0.05 bond and a 0.01 fee. A full run moves about 0.35 PUSD. */
 export const MAINNET_AMOUNTS: Amounts = { bond: 5n, fee: 1n, failChange: 2n, timeoutChange: 1n };
 
-// Mainnet hot-wallet caps for the runner: the throwaway keys live in a plaintext .env.local, so the
-// runner refuses to spend from an agent holding more than this. Move the excess out with "sweep".
+// Mainnet caps for the runner. Bonds stay at cents. The throwaway keys live in a plaintext
+// .env.local, so the runner refuses to spend from an agent holding more than the app's own mainnet
+// hot-wallet cap (lib/constants.ts: 1,000,000 sats or 20.00 PUSD). Move any excess out with "sweep".
 export const MAINNET_MAX_BOND = 10n;
-export const MAINNET_MAX_AGENT_SATS = 250_000n;
-export const MAINNET_MAX_AGENT_TOKENS = 1_000n; // 10.00 PUSD
+export const MAINNET_MAX_AGENT_SATS = MAINNET_AGENT_MAX_SATS;
+export const MAINNET_MAX_AGENT_TOKENS = MAINNET_AGENT_MAX_TOKENS;
 
 function amountsOf(ctx: FlowContext): Amounts {
   return ctx.amounts ?? CHIPNET_AMOUNTS;
@@ -250,6 +253,34 @@ export async function scenarioCancel(ctx: FlowContext) {
   record(ctx, 'cancel', 'cancel (agent checkSig)', (await b.send()).txid);
 }
 
+/**
+ * Cancel any bond still sitting in this runner's offer contracts (the normal and the short-window
+ * terms) back to the agent, for example after a run stopped between "fund offer" and "accept".
+ * Only coins holding exactly the bond in the bond token can take the cancel path; others are listed
+ * and left alone. Returns the cancel txids.
+ */
+export async function reclaimOffers(ctx: FlowContext): Promise<string[]> {
+  const txids: string[] = [];
+  for (const short of [false, true]) {
+    const offer = offerParams(ctx, short);
+    const offerContract = makeOfferContract(offer, ctx.provider);
+    for (const u of await offerContract.getUtxos()) {
+      if (u.token?.category !== offer.tokenCategory || u.token.amount !== offer.bondAmount || u.token.nft) {
+        ctx.log(`  reclaim     skipping ${u.txid}:${u.vout} (${u.satoshis} sats, not exactly the bond)`);
+        continue;
+      }
+      const b = buildCancel({
+        provider: ctx.provider, offer, offerContract, offerUtxo: u, agentPk: ctx.agent.pk, agentSig: ctx.agent.template,
+      });
+      const txid = (await b.send()).txid;
+      record(ctx, 'reclaim', 'cancel a leftover offer', txid, `was ${u.txid.slice(0, 12)}...:${u.vout}`);
+      txids.push(txid);
+    }
+  }
+  if (txids.length === 0) ctx.log('  reclaim     no leftover offers');
+  return txids;
+}
+
 export interface PendingEscrow {
   scenario: string;
   kind: 'noresponse' | 'timeout';
@@ -330,6 +361,43 @@ export async function scenarioStartShort(ctx: FlowContext, kind: 'noresponse' | 
   return { scenario: kind, kind, offer, terms: a.terms, escrowTxid: a.escrowTxid, readyAt };
 }
 
+/**
+ * Wait until the chain reaches `target` (with `wait`), or check once (without). While waiting, a
+ * dropped Electrum connection is retried every minute, up to `maxFailures` times in a row, instead
+ * of ending the run one block early; a height line is printed only when the height changes.
+ */
+export async function waitForHeight(
+  getHeight: () => Promise<number>,
+  target: number,
+  opts: { wait: boolean; log: (line: string) => void; sleep?: (ms: number) => Promise<void>; maxFailures?: number },
+): Promise<boolean> {
+  const sleep = opts.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
+  const maxFailures = opts.maxFailures ?? 10;
+  let failures = 0;
+  let last: number | null = null;
+  for (;;) {
+    let now: number;
+    try {
+      now = await getHeight();
+      failures = 0;
+    } catch (e) {
+      failures += 1;
+      if (!opts.wait || failures > maxFailures) throw e;
+      opts.log(`  connection to the Electrum server dropped (${e instanceof Error ? e.message : String(e)}); retrying in a minute (${failures}/${maxFailures})`);
+      await sleep(60_000);
+      continue;
+    }
+    if (now >= target) return true;
+    if (!opts.wait) {
+      opts.log(`  height ${now} < ${target}: run "pending" again later (or add --wait)`);
+      return false;
+    }
+    if (now !== last) opts.log(`  height ${now}, waiting for ${target} (${target - now} more block${target - now === 1 ? '' : 's'})...`);
+    last = now;
+    await sleep(60_000);
+  }
+}
+
 /** Finish a pending NORESPONSE or timeout. Returns false if the chain is not there yet. */
 export async function finishPending(ctx: FlowContext, p: PendingEscrow): Promise<boolean> {
   if (!(await ctx.reachHeight(p.readyAt))) return false;
@@ -394,10 +462,62 @@ export function describeTx(hex: string, network: SellacalidaNetwork): string {
 }
 
 /**
- * Send everything the given keys hold (BCH and tokens) to one locking bytecode, for example your own
- * wallet at the end of a mainnet run. Escrows that are still open are not swept; finish them first.
+ * Wrap a provider so every broadcast prints its outputs and needs a "y" first. Reads, heights and
+ * everything else pass straight through. Every TransactionBuilder in these flows broadcasts through
+ * provider.sendRawTransaction, so nothing reaches the network without an answer here.
  */
-export async function sweep(ctx: FlowContext, keys: Key[], toLock: Uint8Array): Promise<string | null> {
+export function confirmingProvider(
+  inner: NetworkProvider,
+  network: SellacalidaNetwork,
+  ask: (question: string) => Promise<boolean>,
+  log: (line: string) => void = console.log,
+): NetworkProvider {
+  return new Proxy(inner, {
+    get(target, prop, receiver) {
+      if (prop === 'sendRawTransaction') {
+        return async (hex: string) => {
+          log(`\nAbout to broadcast on ${network.toUpperCase()}:\n${describeTx(hex, network)}`);
+          if (!(await ask('Broadcast this transaction? [y/N] '))) throw new Error('broadcast declined; nothing was sent');
+          return target.sendRawTransaction(hex);
+        };
+      }
+      const v = Reflect.get(target, prop, receiver);
+      return typeof v === 'function' ? v.bind(target) : v;
+    },
+  });
+}
+
+export interface SweepDestination {
+  lock: Uint8Array;
+  /** a token-aware (z...) address: the wallet behind it says it can hold CashTokens */
+  tokenAware: boolean;
+}
+
+/**
+ * Validate a sweep destination: a CashAddress on this network, not one of the runner's own
+ * throwaway keys (that would leave the money in the plaintext .env.local).
+ */
+export function parseSweepDestination(address: string, network: SellacalidaNetwork, ownKeys: Key[]): SweepDestination {
+  const prefix = networkPrefix(network);
+  const full = address.includes(':') ? address : `${prefix}:${address}`;
+  const decoded = cashAddressToLockingBytecode(full);
+  if (typeof decoded === 'string') throw new Error(`not a CashAddress: ${decoded}`);
+  if (decoded.prefix !== prefix) throw new Error(`${address} is not a ${network} address`);
+  if (ownKeys.some((k) => binToHex(k.lock) === binToHex(decoded.bytecode))) {
+    throw new Error('that is one of the runner\'s own throwaway keys; sweep to your own wallet instead');
+  }
+  const info = decodeCashAddress(full);
+  const tokenAware = typeof info !== 'string' && info.type.endsWith('WithTokens');
+  return { lock: decoded.bytecode, tokenAware };
+}
+
+/**
+ * Send everything the given keys hold (BCH and tokens) to one destination, for example your own
+ * wallet at the end of a mainnet run. Escrows that are still open are not swept; finish them first.
+ * Tokens only go to a token-aware address: a wallet without CashTokens support can burn them.
+ */
+export async function sweep(ctx: FlowContext, keys: Key[], to: SweepDestination): Promise<string | null> {
+  const toLock = to.lock;
   const ins: { u: SpendableUtxo; k: Key }[] = [];
   for (const k of keys) for (const u of await utxosOf(ctx, k)) ins.push({ u, k });
   if (ins.length === 0) {
@@ -409,6 +529,12 @@ export async function sweep(ctx: FlowContext, keys: Key[], toLock: Uint8Array): 
     if (u.token && !u.token.nft) fungible.set(u.token.category, (fungible.get(u.token.category) ?? 0n) + u.token.amount);
   }
   const nfts = ins.filter((x) => x.u.token?.nft);
+  if ((fungible.size > 0 || nfts.length > 0) && !to.tokenAware) {
+    throw new Error(
+      'there are tokens to sweep: use your wallet\'s token-aware address (bitcoincash:z... on mainnet) so a wallet ' +
+        'without CashTokens support cannot burn them',
+    );
+  }
   const inSats = ins.reduce((a, x) => a + x.u.satoshis, 0n);
   const fixedOut = BigInt(fungible.size + nfts.length) * MIN_OUTPUT_SATS;
   const { builder, fee } = withFee((f) => {

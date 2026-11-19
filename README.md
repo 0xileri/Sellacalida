@@ -16,14 +16,25 @@ What the verifier cannot do: send the funds anywhere except the agent or the cha
 
 ## Status
 
-Milestone 1 (contracts + wallet spike) is in progress:
+Milestone 1 (contracts + wallet spike): **green on 19 Nov 2026**, three days after the 16 Nov gate (chipnet faucets never paid out, so the real-chain run moved to a capped mainnet run).
 
-- `contracts/SellacalidaOffer.cash`, `contracts/SellacalidaEscrow.cash`: written, compiled with cashc 0.14.0, green on mocknet.
-- Contract runner and `/connect` wallet spike page: built and dry-run on mocknet. No chipnet faucet paid out, so the real-chain run is a capped mainnet run (`npm run mainnet`, cent-sized PUSD bonds, a prompt before every broadcast); it and the real-wallet run are pending (see `SPIKE.md`).
-- Challenge templates, checkers, the verifier core (decide, sign, settle, timeout), the write-once answer store and reproducible evidence: built and tested on mocknet, and running live on the mocknet preview.
+Done:
+
+- `contracts/SellacalidaOffer.cash`, `contracts/SellacalidaEscrow.cash`: written, compiled with cashc 0.14.0, every path green on mocknet.
+- 430 vitest tests passing (`npm test`), `tsc` clean.
+- Security checklist (spec section 9): all 43 items proven by tests, see `SECURITY_CHECKLIST.md`.
+- Contract runner (`npm run chipnet`, `npm run mainnet`): every scenario dry-run on mocknet, the capped mainnet mode rehearsed with its prompts. On mainnet it uses PUSD bonds of 0.05, caps the hot wallet, asks before every broadcast, and sweeps leftovers to a token-aware address.
+- Challenge templates, checkers, the verifier core (decide, sign, settle, timeout), the write-once answer store and reproducible evidence: tested on mocknet and running live on the mocknet preview.
 - Agent runner: calls a real LLM (default `anthropic/claude-sonnet-5.5`) through Orbio's OpenAI-compatible gateway (any compatible base URL works), parses the reply strictly, and commits it write-once with the model id that actually served it. For BCH templates it gets one tool, `get_transaction`, which returns outputs decoded from raw hex verified against the txid; every call is recorded in the commitment and the evidence. `npm run agent:try` asks it one challenge.
-- App: pages `/`, `/arena`, `/challenge/[id]` and `/agent/[id]`, a JSON API, and an in-process verifier loop (started from `instrumentation.ts`). Tested end to end on mocknet with the live agent through the real UI; not yet run against a real chain or a real wallet. On mainnet it caps bonds at 1.00 PUSD and the agent hot wallet at 1,000,000 sats or 20 PUSD, and refuses an Electrum server on the wrong network.
-- Security checklist (spec section 9): 42 of 43 items proven by tests, see `SECURITY_CHECKLIST.md`. The open one, real-chain relay, waits on the mainnet run.
+- App: pages `/`, `/arena`, `/challenge/[id]` and `/agent/[id]`, a JSON API, and an in-process verifier loop (started from `instrumentation.ts`). Tested end to end on mocknet with the live agent through the real UI, and deployed as a public mocknet preview. On mainnet it refuses bonds above 1.00 PUSD, an agent wallet above 1,000,000 sats or 20 PUSD, keys made for another network, and an Electrum server on the wrong network.
+- Real-chain run on capped mainnet, 19 Nov (replaces chipnet; no chipnet faucet paid out, see the decision in `SPIKE.md`): every contract path broadcast with real PUSD, 17 transactions, all 100 PUSD base units returned. Txids in `SPIKE.md`.
+- Real-wallet run, 19 Nov: Paytaca over WizardConnect on mainnet passed every spike checklist row (connect, balances, PUSD into the offer P2SH32, covenant cancel with placeholders, accept with PUSD change, BCH tip). Funding path decided: PUSD through WizardConnect. Txids in `SPIKE.md`.
+- `/connect` wallet spike page: every flow also signed in tests by a simulated wallet, through the same JSON relay encoding a real wallet sees.
+
+Pending:
+
+- Refund the wallet spike's escrow after height 978185 (Refund on `/connect`, same browser). Selene not tried.
+- After milestone 1: mainnet deploy of the app (`DEPLOY.md`), the Widget Factory deck and EMBER2026 links on the banner, and the demo recording.
 
 ## Layout
 
@@ -55,11 +66,12 @@ tests/                     vitest suites (mocknet)
 
 ```bash
 npm install
-npm test                 # 377 tests, MockNetworkProvider with vmTarget BCH_2026_05
+npm test                 # 430 tests, MockNetworkProvider with vmTarget BCH_2026_05
 npm run compile          # recompile contracts/*.cash (tests fail if artifacts are stale)
 npm run dev              # http://localhost:3000, wallet spike at /connect
 npm run chipnet -- all --network mocknet   # dry-run the chipnet flows in memory
 npm run mainnet -- status                  # capped mainnet run with real PUSD (see SPIKE.md)
+npm run chipnet -- pass --network mocknet --mainnet-amounts --confirm   # rehearse a mainnet step, prompts included
 npm run agent:try        # ask the live agent one challenge (needs LLM_API_KEY, LLM_MODEL_ID)
 ```
 

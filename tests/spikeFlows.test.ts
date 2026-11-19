@@ -2,15 +2,16 @@
 // validated by the mocknet VM: wallet -> P2SH32 token send, placeholder cancel, accept with token
 // change, BCH tip, and a keyless timeout.
 import { describe, expect, it } from 'vitest';
-import { binToHex, hash160, sha256, utf8ToBin } from '@bitauth/libauth';
+import { binToHex, decodeTransaction, encodeTransaction, hash160, hexToBin, sha256, utf8ToBin, type TransactionCommon } from '@bitauth/libauth';
 import type { MockNetworkProvider } from 'cashscript';
-import { pkhToCashAddress } from '@/lib/bch/address';
+import { pkhToCashAddress, withNetworkPrefix } from '@/lib/bch/address';
 import { makeEscrowContract, makeOfferContract, escrowArgsFor } from '@/lib/contracts';
 import {
   buildAcceptFromWallet, buildBchTip, buildCancelWithPlaceholders, buildFundOffer, buildKeylessTimeout,
   SPIKE_OFFER_SATS,
 } from '@/lib/wallet/spikeFlows';
-import type { WalletAddress, WalletUtxo } from '@/lib/wallet/wizard';
+import { relaySignRequest, signWithWallet, type WalletAddress, type WalletUtxo } from '@/lib/wallet/wizard';
+import { parseExtendedJson } from '@wizardconnect/core';
 import { p2pkhLockingBytecode } from '@/lib/bch/transactions';
 import { mockWalletSign } from './mockWallet';
 import { CATEGORY, START_HEIGHT, addUtxo, baseOffer, newProvider, party, stranger, verifier, type Party } from './helpers';
@@ -41,14 +42,23 @@ async function walletUtxos(provider: MockNetworkProvider): Promise<WalletUtxo[]>
   return out;
 }
 
-async function signAndSend(provider: MockNetworkProvider, tx: { builder: { generateWcTransactionObject: (o: object) => unknown }; walletInputs: { inputIndex: number; path: string; index: number }[] }) {
-  const wc = tx.builder.generateWcTransactionObject({ broadcast: false, userPrompt: 'test' });
-  const hex = mockWalletSign(
-    wc as Parameters<typeof mockWalletSign>[0],
-    tx.walletInputs.map((w) => [w.inputIndex, w.path, w.index]),
-    (path, index) => keys[`${path}/${index}`].template,
-  );
-  return provider.sendRawTransaction(hex);
+/**
+ * The real path a sign request takes: the dapp builds it with signWithWallet, the relay sends it
+ * with plain JSON.stringify (as @wizardconnect/core's RelayClient does), and the wallet decodes it
+ * with WizardConnect's parseExtendedJson before signing.
+ */
+const relayWallet = {
+  async signTransaction(request: object) {
+    const wire = JSON.stringify({ action: 'sign_transaction_request', time: 0, sequence: 1, ...request });
+    const decoded = parseExtendedJson(wire) as { transaction: Parameters<typeof mockWalletSign>[0]; inputPaths: [number, string, number][] };
+    const signedTransaction = mockWalletSign(decoded.transaction, decoded.inputPaths, (path, index) => keys[`${path}/${index}`].template);
+    return { signedTransaction };
+  },
+} as unknown as Parameters<typeof signWithWallet>[0];
+
+async function signAndSend(provider: MockNetworkProvider, tx: { builder: Parameters<typeof signWithWallet>[1]; walletInputs: Parameters<typeof signWithWallet>[2] }) {
+  const signed = await signWithWallet(relayWallet, tx.builder, tx.walletInputs, 'test');
+  return provider.sendRawTransaction(signed.signedTransaction);
 }
 
 function setup() {
@@ -126,5 +136,34 @@ describe('wallet spike flows (mock WizardConnect wallet, mocknet VM)', () => {
     await signAndSend(provider, tx);
     const got = await provider.getUtxosForLockingBytecode(p2pkhLockingBytecode(stranger.pkh));
     expect(got.map((u) => u.satoshis)).toEqual([5000n]);
+  });
+});
+
+describe('sign requests survive the WizardConnect relay (17 Nov: "Do not know how to serialize a BigInt")', () => {
+  it('the raw CashScript request cannot be sent as JSON; the relay-encoded one round-trips exactly', async () => {
+    const { provider, offer } = setup();
+    const tx = buildFundOffer({ provider, offer, walletUtxos: await walletUtxos(provider), tokenChange: r0, bchChange: c0 });
+    const raw = tx.builder.generateWcTransactionObject({ broadcast: false, userPrompt: 'x' });
+    expect(() => JSON.stringify({ transaction: raw })).toThrow(/serialize a BigInt/); // what the page did before
+    const request = relaySignRequest(tx.builder, tx.walletInputs, 'x');
+    const wire = JSON.stringify(request);
+    expect(wire).toMatch(/<bigint: \d+n>/);
+    expect(wire).toMatch(/<Uint8Array: 0x[0-9a-f]+>/);
+    const decoded = parseExtendedJson(wire) as { transaction: { transaction: unknown; sourceOutputs: unknown }; inputPaths: unknown };
+    // the unsigned transaction travels as hex (Paytaca decodes it as hex); the rest round-trips exactly
+    expect(decoded.transaction.transaction).toBe(binToHex(encodeTransaction(raw.transaction as TransactionCommon)));
+    expect(decoded.transaction.sourceOutputs).toEqual(raw.sourceOutputs);
+    expect(decoded.inputPaths).toEqual(tx.walletInputs.map((w) => [w.inputIndex, w.path, w.index]));
+  });
+
+  it('hex-decoding an object gives zero bytes: exactly the 19 Nov Paytaca error, so the wallet reads hex', () => {
+    const fromObject = decodeTransaction(hexToBin({ inputs: [] } as unknown as string));
+    expect(fromObject).toBe('Error reading transaction. Error reading Uint32LE: requires 4 bytes. Remaining bytes: 0');
+  });
+
+  it('a typed address without its prefix still works (17 Nov tip: "prefix:payload")', () => {
+    expect(withNetworkPrefix('  qzul2y8c9t00n5q20ywk2fwtpepx6fhk059s6dptln ', 'mainnet')).toBe('bitcoincash:qzul2y8c9t00n5q20ywk2fwtpepx6fhk059s6dptln');
+    expect(withNetworkPrefix('bitcoincash:qzul2y8c9t00n5q20ywk2fwtpepx6fhk059s6dptln', 'mainnet')).toBe('bitcoincash:qzul2y8c9t00n5q20ywk2fwtpepx6fhk059s6dptln');
+    expect(withNetworkPrefix('qq', 'chipnet')).toBe('bchtest:qq');
   });
 });
