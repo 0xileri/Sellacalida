@@ -9,7 +9,7 @@ Spec: `SELLACALIDA_SPEC.md` section 11. Gate date: 16 November 2026 (WAT).
 | Contracts on mocknet | **Green.** Full vitest suite, `npm test`. |
 | Spike flows with a simulated wallet | **Green on mocknet.** `tests/spikeFlows.test.ts` signs every `/connect` flow with a mock WizardConnect wallet (fills P2PKH and contract placeholders the way Paytaca is documented to). This is not a real wallet result. |
 | Chipnet runs | **Skipped (decision below).** Keys were generated and the dry run passed on 13 Nov, but no chipnet faucet paid out by 16 Nov, so the agent was never funded. |
-| Mainnet run (replaces chipnet) | **In progress: cancel, pass and fail done (10 txs, including a stopped first pass and its reclaim); noresponse next.** Capped mainnet mode of the same runner: `npm run mainnet -- ...`, PUSD bonds of 0.05, a y/N prompt before every broadcast. Agent funded on 17 Nov with 501,000 sats and 1.00 PUSD (inside the 1,000,000-sat / 20 PUSD cap). Dry-run and rehearsed (prompts included) on mocknet; `tests/chipnetFlows.test.ts`. Txids go in the step table below as each one lands. |
+| Mainnet run (replaces chipnet) | **In progress: cancel, pass, fail and noresponse done; timeout and sweep next.** Capped mainnet mode of the same runner: `npm run mainnet -- ...`, PUSD bonds of 0.05, a y/N prompt before every broadcast. Agent funded on 17 Nov with 501,000 sats and 1.00 PUSD (inside the 1,000,000-sat / 20 PUSD cap). Dry-run and rehearsed (prompts included) on mocknet; `tests/chipnetFlows.test.ts`. Txids go in the step table below as each one lands. |
 | Real wallets (Paytaca, Selene) | **Not run yet.** Needs a phone or browser wallet. Fill in the tables below. |
 | Funding path decision | **Pending the real-wallet rows.** Default plan: test token / PUSD through WizardConnect. Fallbacks in order: the other wallet, an XO template for the token send, then BCH-only bonds. |
 
@@ -110,7 +110,7 @@ Filled in as each broadcast lands. Explorer: explorer.bch.ninja.
 | 8 | fail | settle FAIL (2-output, fee input) | [d0a9dd0d9e…](https://explorer.bch.ninja/tx/d0a9dd0d9e0be40d42a2f9c9494b4c301e722d5ca9b6876d9e053c67cce7587a) | Broadcast 19 Nov. 1,168 B, 2 in / 2 out: bond + fee (6 PUSD) and all 3,000 escrow sats to the challenger; the fee wallet paid the network fee (1,713 sats change). |
 | 9 | noresponse | fund offer | | |
 | 10 | noresponse | accept (exact) | | |
-| 11 | noresponse | settle NORESPONSE (after 1 block) | | |
+| 11 | noresponse | settle NORESPONSE (after 1 block) | [fc4ee62a4e…](https://explorer.bch.ninja/tx/fc4ee62a4ee0943d90eabab63c796926e07672aa2e85491a7f0372b0acca0a5b) | Broadcast 19 Nov. 968 B, 1 in / 1 out: the agent never answered; after the answer deadline the verifier's NORESPONSE attestation (zero answerHash) paid bond + fee (6 PUSD) and 1,933 sats to the challenger, the escrow paying its own fee. |
 | 12 | timeout | fund offer | | |
 | 13 | timeout | accept (change 1) | | |
 | 14 | timeout | timeout refund (after 19 blocks) | | |
