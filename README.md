@@ -16,7 +16,7 @@ What the verifier cannot do: send the funds anywhere except the agent or the cha
 
 ## Status
 
-Milestone 1 (contracts + wallet spike), as of 19 Nov 2026.
+Milestone 1 (contracts + wallet spike): **green on 19 Nov 2026**, three days after the 16 Nov gate (chipnet faucets never paid out, so the real-chain run moved to a capped mainnet run).
 
 Done:
 
@@ -28,11 +28,12 @@ Done:
 - Agent runner: calls a real LLM (default `anthropic/claude-sonnet-5.5`) through Orbio's OpenAI-compatible gateway (any compatible base URL works), parses the reply strictly, and commits it write-once with the model id that actually served it. For BCH templates it gets one tool, `get_transaction`, which returns outputs decoded from raw hex verified against the txid; every call is recorded in the commitment and the evidence. `npm run agent:try` asks it one challenge.
 - App: pages `/`, `/arena`, `/challenge/[id]` and `/agent/[id]`, a JSON API, and an in-process verifier loop (started from `instrumentation.ts`). Tested end to end on mocknet with the live agent through the real UI, and deployed as a public mocknet preview. On mainnet it refuses bonds above 1.00 PUSD, an agent wallet above 1,000,000 sats or 20 PUSD, keys made for another network, and an Electrum server on the wrong network.
 - Real-chain run on capped mainnet, 19 Nov (replaces chipnet; no chipnet faucet paid out, see the decision in `SPIKE.md`): every contract path broadcast with real PUSD, 17 transactions, all 100 PUSD base units returned. Txids in `SPIKE.md`.
-- `/connect` wallet spike page: every flow signed by a simulated WizardConnect wallet in tests.
+- Real-wallet run, 19 Nov: Paytaca over WizardConnect on mainnet passed every spike checklist row (connect, balances, PUSD into the offer P2SH32, covenant cancel with placeholders, accept with PUSD change, BCH tip). Funding path decided: PUSD through WizardConnect. Txids in `SPIKE.md`.
+- `/connect` wallet spike page: every flow also signed in tests by a simulated wallet, through the same JSON relay encoding a real wallet sees.
 
 Pending:
 
-- Real-wallet run through `/connect` with Paytaca or Selene over WizardConnect, logged in `SPIKE.md`.
+- Refund the wallet spike's escrow after height 978185 (Refund on `/connect`, same browser). Selene not tried.
 - After milestone 1: mainnet deploy of the app (`DEPLOY.md`), the Widget Factory deck and EMBER2026 links on the banner, and the demo recording.
 
 ## Layout
