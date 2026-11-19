@@ -361,6 +361,43 @@ export async function scenarioStartShort(ctx: FlowContext, kind: 'noresponse' | 
   return { scenario: kind, kind, offer, terms: a.terms, escrowTxid: a.escrowTxid, readyAt };
 }
 
+/**
+ * Wait until the chain reaches `target` (with `wait`), or check once (without). While waiting, a
+ * dropped Electrum connection is retried every minute, up to `maxFailures` times in a row, instead
+ * of ending the run one block early; a height line is printed only when the height changes.
+ */
+export async function waitForHeight(
+  getHeight: () => Promise<number>,
+  target: number,
+  opts: { wait: boolean; log: (line: string) => void; sleep?: (ms: number) => Promise<void>; maxFailures?: number },
+): Promise<boolean> {
+  const sleep = opts.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
+  const maxFailures = opts.maxFailures ?? 10;
+  let failures = 0;
+  let last: number | null = null;
+  for (;;) {
+    let now: number;
+    try {
+      now = await getHeight();
+      failures = 0;
+    } catch (e) {
+      failures += 1;
+      if (!opts.wait || failures > maxFailures) throw e;
+      opts.log(`  connection to the Electrum server dropped (${e instanceof Error ? e.message : String(e)}); retrying in a minute (${failures}/${maxFailures})`);
+      await sleep(60_000);
+      continue;
+    }
+    if (now >= target) return true;
+    if (!opts.wait) {
+      opts.log(`  height ${now} < ${target}: run "pending" again later (or add --wait)`);
+      return false;
+    }
+    if (now !== last) opts.log(`  height ${now}, waiting for ${target} (${target - now} more block${target - now === 1 ? '' : 's'})...`);
+    last = now;
+    await sleep(60_000);
+  }
+}
+
 /** Finish a pending NORESPONSE or timeout. Returns false if the chain is not there yet. */
 export async function finishPending(ctx: FlowContext, p: PendingEscrow): Promise<boolean> {
   if (!(await ctx.reachHeight(p.readyAt))) return false;

@@ -32,7 +32,7 @@ import { p2pkhLockingBytecode } from '../../lib/bch/transactions';
 import { PUSD_CATEGORY_MAINNET, type SellacalidaNetwork } from '../../lib/constants';
 import {
   CHIPNET_AMOUNTS, MAINNET_AMOUNTS, checkMainnetCaps, confirmingProvider, finishPending, genesis, parseSweepDestination,
-  reclaimOffers, scenarioCancel, scenarioFail, scenarioPass, scenarioStartShort, seedMocknet, sweep,
+  reclaimOffers, scenarioCancel, scenarioFail, scenarioPass, scenarioStartShort, seedMocknet, sweep, waitForHeight,
   type FlowContext, type Key, type PendingEscrow, type StepResult,
 } from './flows';
 
@@ -235,16 +235,7 @@ async function main() {
         if ((await raw.getBlockHeight()) < h) raw.setBlockHeight(h);
         return true;
       }
-      for (;;) {
-        const now = await raw.getBlockHeight();
-        if (now >= h) return true;
-        if (!wait) {
-          console.log(`  height ${now} < ${h}: run "pending" again later (or add --wait)`);
-          return false;
-        }
-        console.log(`  height ${now}, waiting for ${h}...`);
-        await new Promise((r) => setTimeout(r, 60_000));
-      }
+      return waitForHeight(() => raw.getBlockHeight(), h, { wait, log: (l) => console.log(l) });
     },
   };
 

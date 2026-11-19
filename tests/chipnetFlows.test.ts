@@ -6,7 +6,7 @@ import { p2pkhLockingBytecode } from '@/lib/bch/transactions';
 import { PUSD_CATEGORY_MAINNET } from '@/lib/constants';
 import {
   MAINNET_AMOUNTS, checkMainnetCaps, confirmingProvider, describeTx, finishPending, genesis, parseSweepDestination,
-  reclaimOffers, scenarioCancel, scenarioFail, scenarioPass, scenarioStartShort, seedMocknet, sweep,
+  reclaimOffers, waitForHeight, scenarioCancel, scenarioFail, scenarioPass, scenarioStartShort, seedMocknet, sweep,
   type FlowContext, type Key,
 } from '../scripts/chipnet/flows';
 import { encodeCashAddress } from '@bitauth/libauth';
@@ -249,5 +249,40 @@ describe('mainnet runner: reclaim a bond left behind by a stopped run', () => {
       'cancel a leftover offer', 'cancel a leftover offer',
     ]);
     expect(await reclaimOffers(ctx)).toEqual([]); // nothing left
+  });
+});
+
+describe('mainnet runner: waiting for a block height', () => {
+  const heights = (...seq: (number | Error)[]) => {
+    let i = 0;
+    return vi.fn(async () => {
+      const v = seq[Math.min(i++, seq.length - 1)];
+      if (v instanceof Error) throw v;
+      return v;
+    });
+  };
+  const noSleep = vi.fn(async () => {});
+
+  it('survives a dropped Electrum connection one block short (19 Nov) and prints each height once', async () => {
+    const drop = new Error('Failed to establish connection: WebSocket: 1006: .');
+    const get = heights(978017, 978017, 978021, drop, drop, 978021, 978022);
+    const log: string[] = [];
+    await expect(waitForHeight(get, 978022, { wait: true, log: (l) => log.push(l), sleep: noSleep })).resolves.toBe(true);
+    expect(log).toEqual([
+      '  height 978017, waiting for 978022 (5 more blocks)...',
+      '  height 978021, waiting for 978022 (1 more block)...',
+      '  connection to the Electrum server dropped (Failed to establish connection: WebSocket: 1006: .); retrying in a minute (1/10)',
+      '  connection to the Electrum server dropped (Failed to establish connection: WebSocket: 1006: .); retrying in a minute (2/10)',
+    ]);
+  });
+
+  it('gives up after too many failures in a row, and never retries without --wait', async () => {
+    const drop = new Error('down');
+    await expect(waitForHeight(heights(drop), 10, { wait: true, log: () => {}, sleep: noSleep, maxFailures: 3 })).rejects.toThrow('down');
+    await expect(waitForHeight(heights(drop), 10, { wait: false, log: () => {}, sleep: noSleep })).rejects.toThrow('down');
+    const log: string[] = [];
+    await expect(waitForHeight(heights(5), 10, { wait: false, log: (l) => log.push(l), sleep: noSleep })).resolves.toBe(false);
+    expect(log).toEqual(['  height 5 < 10: run "pending" again later (or add --wait)']);
+    await expect(waitForHeight(heights(10), 10, { wait: false, log: () => {}, sleep: noSleep })).resolves.toBe(true);
   });
 });
