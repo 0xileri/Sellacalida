@@ -4,11 +4,13 @@
 // on mocknet. Real wallet behaviour is still what SPIKE.md records.
 import {
   binToHex,
+  decodeTransaction,
   encodeDataPush,
   encodeTransaction,
   flattenBinArray,
   generateSigningSerializationBCH,
   hash256,
+  hexToBin,
   type Input,
   type Output,
   type TransactionCommon,
@@ -18,7 +20,8 @@ import type { SignatureTemplate } from 'cashscript';
 const SIGHASH_ALL_UTXOS_FORKID = 0x61;
 
 interface WcObject {
-  transaction: TransactionCommon;
+  /** the unsigned transaction as hex (what Paytaca expects over WizardConnect) or as an object */
+  transaction: TransactionCommon | string;
   sourceOutputs: (Input & Output & { contract?: { redeemScript: Uint8Array } })[];
 }
 
@@ -36,9 +39,16 @@ export function mockWalletSign(
   inputPaths: [number, string, number][],
   keyFor: (path: string, index: number) => SignatureTemplate,
 ): string {
+  // like a wallet: a hex transaction is decoded; an empty or non-hex one fails the way Paytaca's did
+  let base: TransactionCommon;
+  if (typeof wc.transaction === 'string') {
+    const d = decodeTransaction(hexToBin(wc.transaction));
+    if (typeof d === 'string') throw new Error(`Failed to decode transaction: ${d}`);
+    base = d;
+  } else base = wc.transaction;
   const transaction: TransactionCommon = {
-    ...wc.transaction,
-    inputs: wc.transaction.inputs.map((i) => ({ ...i, unlockingBytecode: i.unlockingBytecode.slice() })),
+    ...base,
+    inputs: base.inputs.map((i) => ({ ...i, unlockingBytecode: i.unlockingBytecode.slice() })),
   };
   const sourceOutputs = wc.sourceOutputs;
   const signed = new Map<number, Uint8Array>();

@@ -21,7 +21,7 @@ Milestone 1 (contracts + wallet spike), as of 19 Nov 2026.
 Done:
 
 - `contracts/SellacalidaOffer.cash`, `contracts/SellacalidaEscrow.cash`: written, compiled with cashc 0.14.0, every path green on mocknet.
-- 429 vitest tests passing (`npm test`), `tsc` clean.
+- 430 vitest tests passing (`npm test`), `tsc` clean.
 - Security checklist (spec section 9): all 43 items proven by tests, see `SECURITY_CHECKLIST.md`.
 - Contract runner (`npm run chipnet`, `npm run mainnet`): every scenario dry-run on mocknet, the capped mainnet mode rehearsed with its prompts. On mainnet it uses PUSD bonds of 0.05, caps the hot wallet, asks before every broadcast, and sweeps leftovers to a token-aware address.
 - Challenge templates, checkers, the verifier core (decide, sign, settle, timeout), the write-once answer store and reproducible evidence: tested on mocknet and running live on the mocknet preview.
@@ -65,7 +65,7 @@ tests/                     vitest suites (mocknet)
 
 ```bash
 npm install
-npm test                 # 429 tests, MockNetworkProvider with vmTarget BCH_2026_05
+npm test                 # 430 tests, MockNetworkProvider with vmTarget BCH_2026_05
 npm run compile          # recompile contracts/*.cash (tests fail if artifacts are stale)
 npm run dev              # http://localhost:3000, wallet spike at /connect
 npm run chipnet -- all --network mocknet   # dry-run the chipnet flows in memory

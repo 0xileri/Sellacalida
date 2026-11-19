@@ -2,7 +2,7 @@
 // validated by the mocknet VM: wallet -> P2SH32 token send, placeholder cancel, accept with token
 // change, BCH tip, and a keyless timeout.
 import { describe, expect, it } from 'vitest';
-import { binToHex, hash160, sha256, utf8ToBin } from '@bitauth/libauth';
+import { binToHex, decodeTransaction, encodeTransaction, hash160, hexToBin, sha256, utf8ToBin, type TransactionCommon } from '@bitauth/libauth';
 import type { MockNetworkProvider } from 'cashscript';
 import { pkhToCashAddress, withNetworkPrefix } from '@/lib/bch/address';
 import { makeEscrowContract, makeOfferContract, escrowArgsFor } from '@/lib/contracts';
@@ -149,9 +149,16 @@ describe('sign requests survive the WizardConnect relay (17 Nov: "Do not know ho
     const wire = JSON.stringify(request);
     expect(wire).toMatch(/<bigint: \d+n>/);
     expect(wire).toMatch(/<Uint8Array: 0x[0-9a-f]+>/);
-    const decoded = parseExtendedJson(wire) as { transaction: unknown; inputPaths: unknown };
-    expect(decoded.transaction).toEqual(raw);
+    const decoded = parseExtendedJson(wire) as { transaction: { transaction: unknown; sourceOutputs: unknown }; inputPaths: unknown };
+    // the unsigned transaction travels as hex (Paytaca decodes it as hex); the rest round-trips exactly
+    expect(decoded.transaction.transaction).toBe(binToHex(encodeTransaction(raw.transaction as TransactionCommon)));
+    expect(decoded.transaction.sourceOutputs).toEqual(raw.sourceOutputs);
     expect(decoded.inputPaths).toEqual(tx.walletInputs.map((w) => [w.inputIndex, w.path, w.index]));
+  });
+
+  it('hex-decoding an object gives zero bytes: exactly the 19 Nov Paytaca error, so the wallet reads hex', () => {
+    const fromObject = decodeTransaction(hexToBin({ inputs: [] } as unknown as string));
+    expect(fromObject).toBe('Error reading transaction. Error reading Uint32LE: requires 4 bytes. Remaining bytes: 0');
   });
 
   it('a typed address without its prefix still works (17 Nov tip: "prefix:payload")', () => {

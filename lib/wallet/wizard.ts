@@ -1,7 +1,7 @@
 // WizardConnect helpers (browser). The wallet shares xpubs for its receive / change paths; the dapp
 // derives addresses, finds UTXOs, builds transactions with CashScript placeholders, and asks the
 // wallet to sign only the inputs listed in `inputPaths` ([inputIndex, pathName, addressIndex]).
-import { binToHex, hash160, stringify } from '@bitauth/libauth';
+import { binToHex, encodeTransaction, hash160, stringify, type TransactionCommon } from '@bitauth/libauth';
 import type { DappConnectionManager } from '@wizardconnect/dapp';
 import type { SignTransactionRequest } from '@wizardconnect/core';
 import type { NetworkProvider, SpendableUtxo, TransactionBuilder } from 'cashscript';
@@ -75,11 +75,14 @@ export interface SignedResult {
 }
 
 /**
- * The sign request in the form the WizardConnect relay can carry. The relay sends messages with
- * plain JSON.stringify, which cannot encode BigInt or Uint8Array, so the transaction object is
- * pre-encoded in the extended JSON format the protocol specifies (`<bigint: 5n>`,
- * `<Uint8Array: 0x...>`; libauth's `stringify`), which the wallet decodes with parseExtendedJson.
- * Passing the raw CashScript object fails with "Do not know how to serialize a BigInt".
+ * The sign request in the form the WizardConnect relay and the wallet accept (found in the first
+ * Paytaca run, 19 Nov):
+ * - `transaction.transaction` is the unsigned transaction as hex, placeholders included. The type
+ *   allows an object too, but Paytaca reads it as hex; an object decodes to zero bytes ("Error
+ *   reading Uint32LE: requires 4 bytes. Remaining bytes: 0").
+ * - everything else (sourceOutputs with their BigInts and bytes) is pre-encoded in the protocol's
+ *   extended JSON (`<bigint: 5n>`, `<Uint8Array: 0x...>`; libauth's `stringify`), because the
+ *   relay sends messages with plain JSON.stringify ("Do not know how to serialize a BigInt").
  */
 export function relaySignRequest(
   builder: TransactionBuilder,
@@ -87,7 +90,8 @@ export function relaySignRequest(
   userPrompt: string,
 ) {
   const raw = builder.generateWcTransactionObject({ broadcast: false, userPrompt });
-  const transaction = JSON.parse(stringify(raw)) as unknown;
+  const unsignedHex = binToHex(encodeTransaction(raw.transaction as TransactionCommon));
+  const transaction = JSON.parse(stringify({ ...raw, transaction: unsignedHex })) as unknown;
   const inputPaths: [number, string, number][] = walletInputs.map((w) => [w.inputIndex, w.path, w.index]);
   return { transaction, inputPaths };
 }
