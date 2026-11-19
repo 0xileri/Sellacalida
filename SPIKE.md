@@ -9,7 +9,7 @@ Spec: `SELLACALIDA_SPEC.md` section 11. Gate date: 16 November 2026 (WAT).
 | Contracts on mocknet | **Green.** Full vitest suite, `npm test`. |
 | Spike flows with a simulated wallet | **Green on mocknet.** `tests/spikeFlows.test.ts` signs every `/connect` flow with a mock WizardConnect wallet (fills P2PKH and contract placeholders the way Paytaca is documented to). This is not a real wallet result. |
 | Chipnet runs | **Skipped (decision below).** Keys were generated and the dry run passed on 13 Nov, but no chipnet faucet paid out by 16 Nov, so the agent was never funded. |
-| Mainnet run (replaces chipnet) | **In progress: cancel and pass done (7 txs, including a stopped first pass and its reclaim); fail next.** Capped mainnet mode of the same runner: `npm run mainnet -- ...`, PUSD bonds of 0.05, a y/N prompt before every broadcast. Agent funded on 17 Nov with 501,000 sats and 1.00 PUSD (inside the 1,000,000-sat / 20 PUSD cap). Dry-run and rehearsed (prompts included) on mocknet; `tests/chipnetFlows.test.ts`. Txids go in the step table below as each one lands. |
+| Mainnet run (replaces chipnet) | **In progress: cancel, pass and fail done (10 txs, including a stopped first pass and its reclaim); noresponse next.** Capped mainnet mode of the same runner: `npm run mainnet -- ...`, PUSD bonds of 0.05, a y/N prompt before every broadcast. Agent funded on 17 Nov with 501,000 sats and 1.00 PUSD (inside the 1,000,000-sat / 20 PUSD cap). Dry-run and rehearsed (prompts included) on mocknet; `tests/chipnetFlows.test.ts`. Txids go in the step table below as each one lands. |
 | Real wallets (Paytaca, Selene) | **Not run yet.** Needs a phone or browser wallet. Fill in the tables below. |
 | Funding path decision | **Pending the real-wallet rows.** Default plan: test token / PUSD through WizardConnect. Fallbacks in order: the other wallet, an XO template for the token send, then BCH-only bonds. |
 
@@ -105,9 +105,9 @@ Filled in as each broadcast lands. Explorer: explorer.bch.ninja.
 | 3 | pass | fund offer | [a332da328f…](https://explorer.bch.ninja/tx/a332da328fce56526911229d6e1db9453d9a6918464ee8ed99e423386cfac4b9) | Broadcast 17 Nov. 543 B, 2 in / 4 out: 5 PUSD + 3,000 sats into the same offer `bitcoincash:pds8kexq…a0gp`, 1 PUSD + 4,000 sats to the challenger. |
 | 4 | pass | accept (exact) | [5777c9dd6e…](https://explorer.bch.ninja/tx/5777c9dd6e753dcac57f5c41b46e4e346f77b64e59f09812b5d9efb96106744e) | Broadcast 17 Nov. 1,974 B, 2 in / 2 out: escrow `bitcoincash:p04grlhd…w982` gets 6 PUSD + 3,000 sats; 1,826 sats token-free change to the challenger. Expiry 978097. |
 | 5 | pass | settle PASS (1-output) | [cebc678bf3…](https://explorer.bch.ninja/tx/cebc678bf3c40b353963a736d9d2ff4cf04feefec91d556a96a70e7a3cbf5d26) | Broadcast 17 Nov. 968 B, 1 in / 1 out: verifier attestation checked with checkDataSig on chain; bond + fee (6 PUSD) and 1,933 sats to the agent. |
-| 6 | fail | fund offer | | |
-| 7 | fail | accept (change 2) | | |
-| 8 | fail | settle FAIL (2-output, fee input) | | |
+| 6 | fail | fund offer | [fa172652ec…](https://explorer.bch.ninja/tx/fa172652ec90f61d47b7fc94d9a90e17eff82c3cbd35eb1753df1a87c39cb970) | Broadcast 19 Nov. 859 B, 4 in / 5 out: 5 PUSD into the offer, 3 PUSD + 4,000 sats to the challenger, 3,000 sats to the fee wallet. |
+| 7 | fail | accept (change 2) | [58351b7f46…](https://explorer.bch.ninja/tx/58351b7f46e6ca2a1fef2d055c34749c7c7789cd6a0f36692854d875916258a3) | Broadcast 19 Nov. 2,009 B, 2 in / 2 out: escrow `bitcoincash:pdkvhamk…sy7` gets 6 PUSD + 3,000 sats; output 1 returns 2 PUSD + 1,788 sats change to the challenger (the PUSD-style change path). Expiry 978098. |
+| 8 | fail | settle FAIL (2-output, fee input) | [d0a9dd0d9e…](https://explorer.bch.ninja/tx/d0a9dd0d9e0be40d42a2f9c9494b4c301e722d5ca9b6876d9e053c67cce7587a) | Broadcast 19 Nov. 1,168 B, 2 in / 2 out: bond + fee (6 PUSD) and all 3,000 escrow sats to the challenger; the fee wallet paid the network fee (1,713 sats change). |
 | 9 | noresponse | fund offer | | |
 | 10 | noresponse | accept (exact) | | |
 | 11 | noresponse | settle NORESPONSE (after 1 block) | | |
