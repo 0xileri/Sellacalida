@@ -10,8 +10,8 @@ Spec: `SELLACALIDA_SPEC.md` section 11. Gate date: 16 November 2026 (WAT).
 | Spike flows with a simulated wallet | **Green on mocknet.** `tests/spikeFlows.test.ts` signs every `/connect` flow with a mock WizardConnect wallet (fills P2PKH and contract placeholders the way Paytaca is documented to). This is not a real wallet result. |
 | Chipnet runs | **Skipped (decision below).** Keys were generated and the dry run passed on 13 Nov, but no chipnet faucet paid out by 16 Nov, so the agent was never funded. |
 | Mainnet run (replaces chipnet) | **Green, 19 Nov.** Every contract path broadcast and confirmed on mainnet with real PUSD: cancel, accept exact + settle PASS, accept with token change + settle FAIL (fee input), NORESPONSE after the answer deadline, timeout refund after expiry, plus a reclaim and the final sweep. 17 transactions, txids in the table below. In: 501,000 sats + 100 PUSD base units. Out: 479,309 sats + all 100 PUSD base units. Network fees: 21,691 sats. |
-| Real wallets (Paytaca, Selene) | **In progress (Paytaca, mainnet, 19 Nov).** Connect over WizardConnect worked and the wallet's mainnet addresses and balances were read. Two dapp-side request format problems found and fixed before any signature: (1) the raw CashScript request holds BigInts the relay's JSON cannot carry, now sent in the protocol's extended JSON; (2) Paytaca reads `transaction` as hex, and an object decoded to zero bytes ("Error reading Uint32LE: requires 4 bytes"), now sent as the unsigned hex. Re-running. |
-| Funding path decision | **Pending the real-wallet rows.** Default plan: test token / PUSD through WizardConnect. Fallbacks in order: the other wallet, an XO template for the token send, then BCH-only bonds. |
+| Real wallets (Paytaca, Selene) | **In progress (Paytaca, mainnet, 19 Nov).** Connect, balances, PUSD + BCH into the offer P2SH32, and a BCH tip all signed by Paytaca over WizardConnect. Cancel through the contract and accept with token change next. Selene not tried. |
+| Funding path decision | **Default plan holds so far: PUSD through WizardConnect.** Paytaca sent PUSD into the offer P2SH32 on mainnet (row 3). Confirmed once the accept with token change (rows 4 and 6) goes through. |
 
 Nothing in this file claims a wallet result that has not happened.
 
@@ -78,18 +78,18 @@ npm run dev    # then open http://localhost:3000/connect
 
 ## Checklist (fill in)
 
-Wallet: ______  Version: ______  Network: ______  Date (WAT): ______
+Wallet: Paytaca  Version: (to fill)  Network: mainnet  Date (WAT): 19 Nov 2026, from 22:42
 
 | # | Step | Result | Txid | Notes |
 | --- | --- | --- | --- | --- |
-| 1 | Connect over WizardConnect | | | |
-| 2 | Read address and test-token balance | | | |
-| 3 | Send test token + dust BCH to the offer P2SH32 (`contract.tokenAddress`) | | | |
+| 1 | Connect over WizardConnect | ok | | QR from `/connect` scanned in Paytaca; session restored after page reloads. |
+| 2 | Read address and test-token balance | ok | | 15 addresses derived from the shared xpubs (10 receive, 5 change); PUSD balance read (104 base units) at height 978084. |
+| 3 | Send test token + dust BCH to the offer P2SH32 (`contract.tokenAddress`) | ok | [d1d96f49ab…](https://explorer.bch.ninja/tx/d1d96f49ab8d0a7fd0ea660714b5b4778e302c3bc833827cf5527f951d2a8ffa) | 5 PUSD + 3,000 sats into the offer P2SH32. Paytaca signed two inputs, `inputPaths` [[0,"receive",0],[1,"change",1]]: the PUSD coin and a BCH coin. |
 | 4 | Spend the contract back out (accept: contract input fully unlocked by CashScript, wallet signs only its input) | | | |
 | 5 | Contract-path signature: cancel with `placeholderSignature()` / `placeholderPublicKey()` | | | |
 | 6 | Accept where the wallet's token UTXO is larger than the fee (PUSD-style token change on output 1) | | | |
-| 7 | Failures recorded precisely (token to P2SH32 rejected, multi-input signing, token change, broadcast flag, path index) | | | |
-| - | Native BCH tip | | | |
+| 7 | Failures recorded precisely (token to P2SH32 rejected, multi-input signing, token change, broadcast flag, path index) | ok | | No wallet-side refusals so far. Three dapp-side problems surfaced first and were fixed: (a) the request carried raw BigInts the relay's JSON cannot encode ("Do not know how to serialize a BigInt"), now extended JSON; (b) Paytaca reads `transaction` as hex, and an object decoded to zero bytes ("Error reading Uint32LE: requires 4 bytes. Remaining bytes: 0"), now unsigned hex; (c) the page fell back to chipnet on reload, now remembered. Multi-input signing and `broadcast: false` (dapp broadcasts) both worked. |
+| - | Native BCH tip | ok | [eafca1fd7c…](https://explorer.bch.ninja/tx/eafca1fd7ce3b1a2fe2d1e99807c6e9bdd423504942cab7df0b3ea20afd976c7) | 2,000 sats to ileri's own address; Paytaca signed `inputPaths` [[0,"change",0]]. |
 
 Repeat the table for the second wallet if time allows.
 
