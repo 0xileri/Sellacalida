@@ -1,9 +1,10 @@
 // Server configuration from the environment (.env.local). Chipnet and mainnet settings can never
 // be mixed: the token category, network id, Electrum server and addresses all follow NETWORK.
-import { binToHex, decodePrivateKeyWif, sha256, utf8ToBin } from '@bitauth/libauth';
+import { decodeCashAddress, binToHex, decodePrivateKeyWif, sha256, utf8ToBin } from '@bitauth/libauth';
+import { explorerTxUrl } from '../bch/network';
 import { KNOWN_WRONG_PUSD_CATEGORY, MAINNET_MAX_BOND, PUSD_CATEGORY_MAINNET, PUSD_DECIMALS, type SellacalidaNetwork } from '../constants';
 import { assertExplorerCategory } from '../tokenCategory';
-import type { PublicConfig } from '../wire';
+import type { PublicConfig, ShowcaseExample } from '../wire';
 
 export interface ServerConfig {
   network: SellacalidaNetwork;
@@ -24,6 +25,8 @@ export interface ServerConfig {
   /** mocknet preview only: anyone may run play challenges through the dev challenger, rate limited */
   publicDevChallenges: { enabled: boolean; minIntervalMs: number; maxPerProcess: number };
   links: { deck: string | null; repo: string; emberAddress: string | null };
+  /** mainnet pass/fail/tip transactions to show once the owner has real txids */
+  examples: ShowcaseExample[];
 }
 
 function int(env: Record<string, string | undefined>, key: string, fallback: bigint): bigint {
@@ -31,6 +34,67 @@ function int(env: Record<string, string | undefined>, key: string, fallback: big
   if (v === undefined || v === '') return fallback;
   if (!/^[0-9]+$/.test(v)) throw new Error(`${key} must be a non-negative integer (base units), got "${v}"`);
   return BigInt(v);
+}
+
+/** A count or a duration. Rejects blanks-that-aren't-blank, negatives, and "NaN", which would disable a cap. */
+function count(env: Record<string, string | undefined>, key: string, fallback: number): number {
+  const v = env[key];
+  if (v === undefined || v === '') return fallback;
+  if (!/^[0-9]+$/.test(v)) throw new Error(`${key} must be a non-negative integer, got "${v}"`);
+  const n = Number(v);
+  if (!Number.isSafeInteger(n)) throw new Error(`${key} is too large`);
+  return n;
+}
+
+function firstSet(env: Record<string, string | undefined>, keys: readonly string[]): string | undefined {
+  for (const key of keys) {
+    const v = env[key]?.trim();
+    if (v) return v;
+  }
+  return undefined;
+}
+
+function httpUrl(name: string, raw: string | undefined): string | null {
+  if (!raw) return null;
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    throw new Error(`${name} must be an http(s) URL`);
+  }
+  if (url.protocol !== 'https:' && url.protocol !== 'http:') throw new Error(`${name} must be an http(s) URL`);
+  return raw;
+}
+
+/** EMBER2026 votes are a mainnet CashTokens address. Never a key. */
+function emberAddress(raw: string | undefined): string | null {
+  if (!raw) return null;
+  const decoded = decodeCashAddress(raw);
+  if (typeof decoded === 'string' || decoded.prefix !== 'bitcoincash') {
+    throw new Error('EMBER_ADDRESS must be a mainnet bitcoincash: cash address');
+  }
+  return raw;
+}
+
+const SHOWCASE: readonly { key: string; kind: ShowcaseExample['kind']; label: string }[] = [
+  { key: 'SHOWCASE_PASS_TXID', kind: 'pass', label: 'Pass' },
+  { key: 'SHOWCASE_FAIL_TXID', kind: 'fail', label: 'Fail' },
+  { key: 'SHOWCASE_NORESPONSE_TXID', kind: 'noresponse', label: 'No response' },
+  { key: 'SHOWCASE_TIP_TXID', kind: 'tip', label: 'BCH tip' },
+];
+
+function showcaseExamples(env: Record<string, string | undefined>): ShowcaseExample[] {
+  const out: ShowcaseExample[] = [];
+  for (const item of SHOWCASE) {
+    const raw = env[item.key]?.trim() ?? '';
+    if (!raw) continue;
+    if (!/^[0-9a-fA-F]{64}$/.test(raw)) throw new Error(`${item.key} must be a 64-character hex transaction id`);
+    const txid = raw.toLowerCase();
+    const href = explorerTxUrl('mainnet', txid);
+    if (!href) throw new Error('mainnet explorer link could not be built');
+    out.push({ kind: item.kind, label: item.label, txid, href });
+  }
+  return out;
 }
 
 const NETWORKS: readonly string[] = ['mainnet', 'chipnet', 'mocknet'];
@@ -104,18 +168,23 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     offerDefaults,
     offerSats: int(env, 'OFFER_SATS', 3000n),
     escrowSats: int(env, 'ESCROW_SATS', 3000n),
-    verifierTickMs: Number(env.VERIFIER_TICK_MS ?? 20_000),
-    autoOffers: Number(env.AUTO_OFFERS ?? (network === 'mocknet' ? 3 : 1)),
+    verifierTickMs: (() => {
+      const ms = count(env, 'VERIFIER_TICK_MS', 20_000);
+      if (ms < 1000) throw new Error('VERIFIER_TICK_MS must be at least 1000 so the loop cannot spin');
+      return ms;
+    })(),
+    autoOffers: count(env, 'AUTO_OFFERS', network === 'mocknet' ? 3 : 1),
     publicDevChallenges: {
       enabled: network === 'mocknet' && env.MOCKNET_PUBLIC_CHALLENGES === '1',
-      minIntervalMs: Number(env.MOCKNET_CHALLENGE_INTERVAL_MS ?? 15_000),
-      maxPerProcess: Number(env.MOCKNET_CHALLENGE_CAP ?? 200),
+      minIntervalMs: count(env, 'MOCKNET_CHALLENGE_INTERVAL_MS', 15_000),
+      maxPerProcess: count(env, 'MOCKNET_CHALLENGE_CAP', 200),
     },
     links: {
-      deck: env.NEXT_PUBLIC_DECK_URL || null,
-      repo: env.NEXT_PUBLIC_REPO_URL || 'https://github.com/0xileri/Sellacalida',
-      emberAddress: env.NEXT_PUBLIC_EMBER_ADDRESS || null,
+      deck: httpUrl('DECK_URL', firstSet(env, ['DECK_URL', 'NEXT_PUBLIC_DECK_URL'])),
+      repo: httpUrl('REPO_URL', firstSet(env, ['REPO_URL', 'NEXT_PUBLIC_REPO_URL'])) ?? 'https://github.com/0xileri/Sellacalida',
+      emberAddress: emberAddress(firstSet(env, ['EMBER_ADDRESS', 'NEXT_PUBLIC_EMBER_ADDRESS'])),
     },
+    examples: showcaseExamples(env),
   };
 }
 
@@ -129,5 +198,6 @@ export function publicConfig(c: ServerConfig): PublicConfig {
     escrowSats: c.escrowSats.toString(),
     featuredAgentId: c.agent.id,
     links: c.links,
+    examples: c.examples,
   };
 }

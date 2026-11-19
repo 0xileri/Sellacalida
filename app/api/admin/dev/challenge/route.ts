@@ -1,4 +1,4 @@
-import { takePublicDevSlot } from '@/lib/server/devLimit';
+import { releasePublicDevSlot, takePublicDevSlot } from '@/lib/server/devLimit';
 import { handle, json, readJson, requireAdmin, serverCtx } from '@/lib/server/http';
 import { afterAccept, challengeView, devSimulateAccept, UserError } from '@/lib/server/service';
 
@@ -15,12 +15,22 @@ export async function POST(req: Request) {
     if (!pub.enabled) requireAdmin(req, ctx);
     const body = await readJson<{ offerId?: unknown; spec?: unknown }>(req);
     if (typeof body.offerId !== 'string') throw new UserError('offerId is required');
+    // The cap bounds model spend. Hold a slot only until the accept is valid; a bad spec
+    // must not burn the preview's budget. Once the accept exists, the slot stays held.
+    let slotHeld = false;
     if (pub.enabled) {
       const refused = takePublicDevSlot(pub);
       if (refused) throw new UserError(refused, 429);
+      slotHeld = true;
     }
-    const c = await devSimulateAccept(ctx, body.offerId, body.spec);
-    await afterAccept(ctx, c.id);
-    return json(challengeView(ctx, ctx.db.challenge(c.id)!), 201);
+    try {
+      const c = await devSimulateAccept(ctx, body.offerId, body.spec);
+      slotHeld = false;
+      await afterAccept(ctx, c.id);
+      return json(challengeView(ctx, ctx.db.challenge(c.id)!), 201);
+    } catch (e) {
+      if (slotHeld) releasePublicDevSlot();
+      throw e;
+    }
   });
 }

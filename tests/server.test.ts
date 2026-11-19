@@ -2,11 +2,11 @@
 // confirmation re-checked from the raw tx, the agent run and the verifier tick.
 import { describe, expect, it, vi } from 'vitest';
 import { MockNetworkProvider, TransactionBuilder } from 'cashscript';
-import { encodePrivateKeyWif, generatePrivateKey } from '@bitauth/libauth';
+import { encodePrivateKeyWif, generatePrivateKey, hash160, secp256k1 } from '@bitauth/libauth';
 import type { LlmClient } from '@/lib/agent/llm';
 import { PUSD_CATEGORY_MAINNET } from '@/lib/constants';
 import { makeOfferContract } from '@/lib/contracts';
-import { loadConfig } from '@/lib/server/config';
+import { loadConfig, publicConfig } from '@/lib/server/config';
 import { buildContextFromEnv, type ServerContext } from '@/lib/server/context';
 import {
   UserError, agentView, cancelOffer, challengeView, confirmAccept, createOffer, devSimulateAccept, prepareChallenge,
@@ -291,6 +291,58 @@ describe('agent + verifier', () => {
     await buildCancel({ provider: ctx.provider, offer: o.params, offerContract: contract, offerUtxo: u, agentPk: ctx.agentKey!.pk, agentSig: ctx.agentKey!.template }).send();
     await refreshOffers(ctx);
     expect(ctx.db.offer(o.id)?.status).toBe('spent');
+  });
+});
+
+describe('mainnet deploy config', () => {
+  const ember = () => {
+    const pk = secp256k1.derivePublicKeyCompressed(generatePrivateKey());
+    if (typeof pk === 'string') throw new Error(pk);
+    return pkhToCashAddress(hash160(pk), 'mainnet', true);
+  };
+
+  it('defaults to the demo bond of 1.00 PUSD and fee of 0.20 PUSD, both under the 1.00 cap', () => {
+    const c = loadConfig({ NETWORK: 'mainnet', DATA_DIR: '/app/data' });
+    expect(c.offerDefaults.bond).toBe(100n);
+    expect(c.offerDefaults.fee).toBe(20n);
+    expect(c.dataDir).toBe('/app/data');
+    expect(c.autoOffers).toBe(1);
+    expect(c.tokenCategory).toBe(PUSD_CATEGORY_MAINNET);
+    expect(c.tokenSymbol).toBe('PUSD');
+  });
+
+  it('reads banner links and mainnet example txids, and refuses a bad txid or a non-address', () => {
+    const pass = 'ab'.repeat(32);
+    const fail = 'cd'.repeat(32);
+    const c = loadConfig({
+      NETWORK: 'mainnet',
+      DECK_URL: 'https://example.com/deck',
+      REPO_URL: 'https://github.com/0xileri/Sellacalida',
+      EMBER_ADDRESS: ember(),
+      SHOWCASE_PASS_TXID: pass,
+      SHOWCASE_FAIL_TXID: fail.toUpperCase(),
+      SHOWCASE_TIP_TXID: '',
+    });
+    const pub = publicConfig(c);
+    expect(pub.links.deck).toBe('https://example.com/deck');
+    expect(pub.links.emberAddress).toMatch(/^bitcoincash:/);
+    expect(pub.examples.map((e) => e.kind)).toEqual(['pass', 'fail']);
+    expect(pub.examples[0]).toMatchObject({ txid: pass, href: `https://explorer.bch.ninja/tx/${pass}` });
+    expect(pub.examples[1].txid).toBe(fail);
+    expect(JSON.stringify(pub)).not.toMatch(/wif|private/i);
+    expect(() => loadConfig({ NETWORK: 'mainnet', SHOWCASE_PASS_TXID: 'zzzz' })).toThrow(/SHOWCASE_PASS_TXID/);
+    expect(() => loadConfig({ NETWORK: 'mainnet', EMBER_ADDRESS: 'not-an-address' })).toThrow(/EMBER_ADDRESS/);
+    expect(() => loadConfig({ NETWORK: 'mainnet', DECK_URL: 'javascript:alert(1)' })).toThrow(/DECK_URL/);
+    // the NEXT_PUBLIC_ names still work; the server reads them at runtime
+    expect(loadConfig({ NETWORK: 'mainnet', NEXT_PUBLIC_DECK_URL: 'https://example.com/d' }).links.deck).toBe('https://example.com/d');
+  });
+
+  it('rejects a non-numeric spend cap instead of treating it as unlimited', () => {
+    expect(() => loadConfig({ NETWORK: 'mocknet', MOCKNET_CHALLENGE_CAP: 'many' })).toThrow(/MOCKNET_CHALLENGE_CAP/);
+    expect(() => loadConfig({ NETWORK: 'mocknet', MOCKNET_CHALLENGE_INTERVAL_MS: '-1' })).toThrow(/MOCKNET_CHALLENGE_INTERVAL_MS/);
+    expect(() => loadConfig({ NETWORK: 'mocknet', VERIFIER_TICK_MS: '0' })).toThrow(/at least 1000/);
+    expect(loadConfig({ NETWORK: 'mocknet', AUTO_OFFERS: '0' }).autoOffers).toBe(0);
+    expect(loadConfig({ NETWORK: 'mocknet', MOCKNET_CHALLENGE_INTERVAL_MS: '0' }).publicDevChallenges.minIntervalMs).toBe(0);
   });
 });
 

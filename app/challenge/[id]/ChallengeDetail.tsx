@@ -11,9 +11,9 @@ import { Amount, Card, CopyText, Disclosure, Pill, SourceBadge, TxLink, short, v
 
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="grid grid-cols-[8.5rem_1fr] gap-2 border-t border-[var(--line)] py-2 text-sm first:border-t-0">
+    <div className="grid grid-cols-1 gap-1 border-t border-[var(--line)] py-2 text-sm first:border-t-0 sm:grid-cols-[8.5rem_1fr] sm:gap-2">
       <div className="text-[var(--muted)]">{label}</div>
-      <div className="min-w-0 break-words">{children}</div>
+      <div className="min-w-0 break-all">{children}</div>
     </div>
   );
 }
@@ -108,7 +108,7 @@ export default function ChallengeDetail({ params }: { params: Promise<{ id: stri
         <div className="flex flex-col gap-6">
           <Card>
             <h2 className="label mb-2">The question</h2>
-            <pre className="whitespace-pre-wrap font-mono text-sm leading-relaxed">{c.prompt}</pre>
+            <pre className="whitespace-pre-wrap break-words font-mono text-sm leading-relaxed">{c.prompt}</pre>
             <details className="mt-3 text-xs">
               <summary className="cursor-pointer text-[var(--muted)]">Canonical spec (its sha256 is bound into the escrow)</summary>
               <pre className="mt-2 overflow-x-auto rounded bg-[var(--background)] p-2 font-mono">{c.specJson}</pre>

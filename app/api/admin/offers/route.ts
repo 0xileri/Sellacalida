@@ -1,4 +1,4 @@
-import { handle, json, readJson, requireAdmin, serverCtx } from '@/lib/server/http';
+import { handle, json, requireAdmin, serverCtx } from '@/lib/server/http';
 import { createOffer, offerView, UserError } from '@/lib/server/service';
 
 const asInt = (v: unknown, name: string) => {
@@ -13,7 +13,18 @@ export async function POST(req: Request) {
   return handle(async () => {
     const ctx = serverCtx();
     requireAdmin(req, ctx);
-    const body = req.headers.get('content-length') === '0' ? {} : await readJson<Record<string, unknown>>(req).catch(() => ({}));
+    const text = await req.text();
+    let body: Record<string, unknown> = {};
+    if (text.trim() !== '') {
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(text) as unknown;
+      } catch {
+        throw new UserError('request body must be JSON');
+      }
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new UserError('request body must be a JSON object');
+      body = parsed as Record<string, unknown>;
+    }
     const o = await createOffer(ctx, {
       bond: asInt(body.bond, 'bond'),
       fee: asInt(body.fee, 'fee'),

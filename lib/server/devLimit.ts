@@ -14,6 +14,16 @@ export function takePublicDevSlot(o: { minIntervalMs: number; maxPerProcess: num
   return null;
 }
 
+/**
+ * Give back a slot that was taken but never reached the model (invalid spec, missing offer).
+ * The interval stays, so a burst of bad requests cannot hammer validation; only the spend cap
+ * is restored.
+ */
+export function releasePublicDevSlot() {
+  const s = state();
+  if (s.count > 0) s.count -= 1;
+}
+
 /** Test hook. */
 export function resetPublicDevLimit() {
   holder.__sellacalidaDevLimit = { last: 0, count: 0 };

@@ -8,9 +8,6 @@ import type { NetworkProvider, SignatureTemplate, SpendableUtxo } from 'cashscri
 import { buildAttestation, signAttestation, verifyAttestation } from '../attestation';
 import { buildSettle, buildTimeout, type UserInput } from '../bch/transactions';
 import { MAX_FEE_SATS, MIN_OUTPUT_SATS, type Verdict } from '../constants';
-
-/** fee headroom for a self-funded settle; the contract caps the real fee at MAX_FEE_SATS */
-const SELF_SETTLE_FEE_BUDGET = MAX_FEE_SATS / 2n + 200n;
 import { escrowArgsFor, makeEscrowContract } from '../contracts';
 import type { AnswerCommitment } from '../store/answers';
 import { sha256Hex } from '../templates/canonical';
@@ -19,6 +16,22 @@ import type { ChallengeSpec } from '../templates/public';
 import { formatWAT } from '../time';
 import { answerDeadlineOf, planVerdict, type VerifierChallenge } from './decide';
 import { EVIDENCE_FORMAT, type Evidence } from './evidence';
+
+/** fee headroom for a self-funded settle; the contract caps the real fee at MAX_FEE_SATS */
+const SELF_SETTLE_FEE_BUDGET = MAX_FEE_SATS / 2n + 200n;
+
+/**
+ * Smallest fee-wallet UTXO we will attach. The change output has to clear MIN_OUTPUT_SATS after
+ * the miner fee, and a settle with an extra input is about a kilobyte (around 1,200 sats at the
+ * 1.1 sat/byte rate). A 2,000-sat output used to be selected and then fail dust checks forever.
+ */
+export const FEE_INPUT_MIN_SATS = MIN_OUTPUT_SATS + 1_500n;
+
+export function pickFeeUtxo<T extends { token?: unknown; satoshis: bigint }>(utxos: readonly T[]): T | undefined {
+  return utxos
+    .filter((u) => !u.token && u.satoshis >= FEE_INPUT_MIN_SATS)
+    .sort((a, b) => (a.satoshis < b.satoshis ? -1 : a.satoshis > b.satoshis ? 1 : 0))[0];
+}
 
 export interface VerifierDeps {
   provider: NetworkProvider;
@@ -41,7 +54,7 @@ export type VerifierOutcome =
 async function feeInput(deps: VerifierDeps): Promise<UserInput | undefined> {
   if (!deps.feeWallet) return undefined;
   const utxos = await deps.provider.getUtxosForLockingBytecode(deps.feeWallet.lock);
-  const u = utxos.filter((x) => !x.token && x.satoshis >= 2n * MIN_OUTPUT_SATS).sort((a, b) => (a.satoshis < b.satoshis ? -1 : 1))[0];
+  const u = pickFeeUtxo(utxos);
   return u ? { utxo: u, unlocker: deps.feeWallet.template.unlockP2PKH() } : undefined;
 }
 

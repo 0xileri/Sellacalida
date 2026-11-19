@@ -34,7 +34,7 @@ Done:
 Pending:
 
 - Refund the wallet spike's escrow after height 978185 (Refund on `/connect`, same browser). Selene not tried.
-- After milestone 1: mainnet deploy of the app (`DEPLOY.md`), the Widget Factory deck and EMBER2026 links on the banner, and the demo recording.
+- After milestone 1: mainnet deploy of the app. The Railway runbook (volume, env vars, `npm run keys`, banner, example txids) is in [`DEPLOY.md`](./DEPLOY.md). Still to record: the Widget Factory deck and the demo.
 
 ## Layout
 
@@ -73,6 +73,7 @@ npm run chipnet -- all --network mocknet   # dry-run the chipnet flows in memory
 npm run mainnet -- status                  # capped mainnet run with real PUSD (see SPIKE.md)
 npm run chipnet -- pass --network mocknet --mainnet-amounts --confirm   # rehearse a mainnet step, prompts included
 npm run agent:try        # ask the live agent one challenge (needs LLM_API_KEY, LLM_MODEL_ID)
+npm run keys             # print fresh mainnet app keys once, in a terminal (never written to disk)
 ```
 
 Chipnet and wallet instructions: [`SPIKE.md`](./SPIKE.md).

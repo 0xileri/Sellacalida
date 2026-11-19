@@ -5,6 +5,14 @@ import type { SellacalidaNetwork, Verdict } from './constants';
 import type { ChallengeTerms, OfferParams } from './contracts';
 import type { TemplateId } from './templates/public';
 
+/** A real mainnet transaction the owner has published for the home page. href is the explorer. */
+export interface ShowcaseExample {
+  kind: 'pass' | 'fail' | 'noresponse' | 'tip';
+  label: string;
+  txid: string;
+  href: string;
+}
+
 /** What the browser may know about the server config. Never includes keys or tokens. */
 export interface PublicConfig {
   network: SellacalidaNetwork;
@@ -14,6 +22,7 @@ export interface PublicConfig {
   escrowSats: string;
   featuredAgentId: string;
   links: { deck: string | null; repo: string; emberAddress: string | null };
+  examples: ShowcaseExample[];
 }
 
 export interface OfferParamsWire {

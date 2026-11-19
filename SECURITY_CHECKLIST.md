@@ -183,6 +183,7 @@ Status: **43 of 43 proven by tests.** The last one is also proven on a real chai
   - `tests/verifier.test.ts` › "waits, and never runs the checker, while no answer is committed before the deadline"
   - `tests/verifier.test.ts` › "runs the checker exactly once, only after the answer is committed"
   - `tests/verifier.test.ts` › "refuses a late commitment rather than signing NORESPONSE over it"
+  - `tests/agent.test.ts` › "does not commit if the deadline passes while the model is running"
 - [x] Fixture attempts are tagged `fixture` in the store and the UI.
   - `tests/store.test.ts` › "an ai answer must record its model id; a fixture may not need one"
   - `tests/verifier.test.ts` › "fixture answers are labeled fixture in the evidence"

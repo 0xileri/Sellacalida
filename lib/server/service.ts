@@ -6,6 +6,7 @@
 import { binToHex, decodeCashAddress, hexToBin } from '@bitauth/libauth';
 import { TransactionBuilder, type SpendableUtxo } from 'cashscript';
 import { answerChallenge } from '../agent/runner';
+import { LlmHttpError } from '../agent/llm';
 import { pkhToCashAddress, networkPrefix } from '../bch/address';
 import { buildAccept, buildCancel, withFee, DEFAULT_FEE_RATE } from '../bch/transactions';
 import { assertChainMatchesNetwork } from '../bch/network';
@@ -327,14 +328,23 @@ export async function runAgent(ctx: ServerContext, challengeId: string): Promise
     const spec = parseCanonical(c.spec) as ChallengeSpec;
     if (validateSpecShape(spec).length) throw new Error('stored spec is invalid');
     const height = await ctx.provider.getBlockHeight();
+    const deadline = Number(c.terms.expiryHeight - ctx.db.offer(c.offerId)!.params.verifierGraceBlocks);
     await answerChallenge({
       spec, challengeId: c.id, store: ctx.answers, client: ctx.llm.client, model: ctx.llm.model,
-      currentHeight: height, answerDeadline: Number(c.terms.expiryHeight - ctx.db.offer(c.offerId)!.params.verifierGraceBlocks),
+      currentHeight: height, answerDeadline: deadline,
+      heightAtCommit: () => ctx.provider.getBlockHeight(),
       chain: ctx.provider,
     });
-    ctx.db.updateChallenge(c.id, { status: 'answered', lastError: null });
+    // a settle or timeout that landed while the model was running must keep its terminal status
+    const fresh = ctx.db.challenge(c.id);
+    if (fresh?.status === 'accepted') ctx.db.updateChallenge(c.id, { status: 'answered', lastError: null });
   } catch (e) {
-    ctx.db.updateChallenge(c.id, { lastError: `agent: ${e instanceof Error ? e.message : String(e)}` });
+    const fresh = ctx.db.challenge(c.id);
+    if (fresh?.status === 'accepted') {
+      const detail = e instanceof LlmHttpError ? `LLM request failed with HTTP ${e.status}` : e instanceof Error ? e.message : String(e);
+      if (e instanceof LlmHttpError) console.error('[sellacalida] agent', e.message);
+      ctx.db.updateChallenge(c.id, { lastError: `agent: ${detail}` });
+    }
   } finally {
     inFlight.delete(c.id);
   }

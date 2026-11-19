@@ -1,7 +1,7 @@
 // Shared protocol constants. Single source of truth for TypeScript.
-// The same values are hard-coded in contracts/*.cash; tests/constants.test.ts fails if they drift.
+// The same values are hard-coded in contracts/*.cash; tests/guards.test.ts fails if they drift.
 
-/** Minimum `value` (sats) on every contract-constrained output. >= token dust, see tests/dust.test.ts. */
+/** Minimum `value` (sats) on every contract-constrained output. >= token dust, see tests/guards.test.ts. */
 export const MIN_OUTPUT_SATS = 1000n;
 
 /**

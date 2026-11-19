@@ -36,9 +36,9 @@ function Tip({ address }: { address: string }) {
           <input className="field w-32 font-mono" inputMode="numeric" value={sats} onChange={(e) => setSats(e.target.value)} />
         </label>
         {wc.state === 'connected' ? (
-          <button className="btn" onClick={() => void send()} disabled={state.busy}>{state.busy ? 'Waiting for wallet…' : 'Tip in BCH'}</button>
+          <button className="btn min-h-11" onClick={() => void send()} disabled={state.busy}>{state.busy ? 'Waiting for wallet…' : 'Tip in BCH'}</button>
         ) : (
-          <button className="btn" onClick={() => wc.connect()}>Connect wallet to tip</button>
+          <button className="btn min-h-11" onClick={() => wc.connect()}>Connect wallet to tip</button>
         )}
       </div>
       {state.txid && <p className="text-sm text-[var(--good)]">Sent. <TxLink txid={state.txid} /></p>}
@@ -64,7 +64,7 @@ export default function AgentDetail({ params }: { params: Promise<{ id: string }
         <p className="text-sm">Model <span className="font-mono">{a.modelId}</span></p>
       </header>
 
-      <section className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+      <section className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         {[
           ['Challenges', r.challenges, ''],
           ['Pass', r.pass, 'text-[var(--good)]'],

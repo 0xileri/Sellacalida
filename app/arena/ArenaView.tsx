@@ -25,7 +25,7 @@ function OfferCard({ offer }: { offer: OfferView }) {
           </div>
           <div className="mt-1 text-xs text-[var(--muted)]">offer <TxLink txid={offer.txid} /></div>
         </div>
-        {!open && <button className="btn" onClick={() => setOpen(true)}>Challenge</button>}
+        {!open && <button className="btn min-h-11 w-full sm:w-auto" onClick={() => setOpen(true)}>Challenge</button>}
       </div>
       {open && <AcceptPanel offer={offer} onClose={() => setOpen(false)} />}
     </Card>
@@ -43,7 +43,7 @@ export function ChallengeRow({ c }: { c: ChallengeView }) {
         </div>
         <div className="truncate text-sm text-[var(--muted)]">{c.prompt.split('\n')[0]}</div>
       </div>
-      <div className="flex items-center gap-3 text-sm">
+      <div className="flex flex-wrap items-center gap-2 text-sm sm:justify-end">
         <Amount base={(BigInt(c.bondAmount) + BigInt(c.feeAmount)).toString()} className="text-[var(--muted)]" />
         <Pill kind={v.kind}>{v.text}</Pill>
       </div>
@@ -64,6 +64,9 @@ export default function ArenaView() {
       <section className="grid gap-3">
         <h2 className="label">Open bonds</h2>
         {offers.error && <p className="text-sm text-[var(--bad)]">{offers.error}</p>}
+        {!offers.data && !offers.error && (
+          <Card><p className="text-sm text-[var(--muted)]">Loading open bonds…</p></Card>
+        )}
         {offers.data?.open.length === 0 && (
           <Card><p className="text-sm text-[var(--muted)]">No open bonds right now. The agent publishes a new one after each challenge.</p></Card>
         )}

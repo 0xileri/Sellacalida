@@ -11,7 +11,7 @@ import { computeExpected } from '@/lib/templates/check';
 import type { ChallengeSpec } from '@/lib/templates/public';
 import { planVerdict, type VerifierChallenge } from '@/lib/verifier/decide';
 import { reproduceEvidence, type Evidence } from '@/lib/verifier/evidence';
-import { runVerifier, type VerifierDeps } from '@/lib/verifier/run';
+import { FEE_INPUT_MIN_SATS, pickFeeUtxo, runVerifier, type VerifierDeps } from '@/lib/verifier/run';
 import {
   START_HEIGHT, addUtxo, agent, baseOffer, challenger, feeWallet, fundedOffer, newProvider, stranger, verifier,
 } from './helpers';
@@ -239,5 +239,18 @@ describe('reproduce catches tampered evidence', () => {
     const e = await settledEvidence();
     e.spec = canonicalize({ ...MATH, params: { op: 'add', left: '1', right: '1' } });
     expect(reproduceEvidence(e).problems.join(' ')).toMatch(/spec does not hash/);
+  });
+});
+
+describe('fee wallet selection', () => {
+  const u = (satoshis: bigint, token = false) => ({ satoshis, ...(token ? { token: { category: 'aa' } } : {}) });
+
+  it('skips a dust-sized fee output and spends the smallest one that can pay the fee', () => {
+    expect(FEE_INPUT_MIN_SATS).toBeGreaterThan(2_000n);
+    const small = u(2_000n);
+    const fit = u(FEE_INPUT_MIN_SATS);
+    const bigger = u(FEE_INPUT_MIN_SATS + 5_000n);
+    expect(pickFeeUtxo([bigger, small, fit])).toBe(fit);
+    expect(pickFeeUtxo([small, u(FEE_INPUT_MIN_SATS, true)])).toBeUndefined();
   });
 });

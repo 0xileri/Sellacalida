@@ -132,6 +132,15 @@ describe('public play challenges on a mocknet preview', () => {
     expect((await devChallenge(post({ offerId: offers[2].id, spec: MATH }))).status).toBe(401);
   });
 
+  it('a rejected spec does not use up the play-challenge cap', async () => {
+    resetPublicDevLimit();
+    ctxWith('42', { MOCKNET_PUBLIC_CHALLENGES: '1', MOCKNET_CHALLENGE_CAP: '1', MOCKNET_CHALLENGE_INTERVAL_MS: '0' });
+    const offer = await (await adminOffer(post({}))).json();
+    const bad = await devChallenge(post({ offerId: offer.id, spec: { ...MATH, params: { op: 'div', left: '1', right: '0' } } }));
+    expect(bad.status).toBe(400);
+    expect((await devChallenge(post({ offerId: offer.id, spec: MATH }))).status).toBe(201);
+  });
+
   it('can never be enabled off mocknet', () => {
     const ctx = buildContextFromEnv({ NETWORK: 'mocknet', MOCKNET_PUBLIC_CHALLENGES: '1' });
     expect(ctx.config.publicDevChallenges.enabled).toBe(true);
@@ -158,5 +167,16 @@ describe('admin routes', () => {
     expect((await adminOffer(post({ bond: 'lots' }))).status).toBe(400);
     const o = await (await adminOffer(post({ bond: '250', fee: '30' }))).json();
     expect(o.params).toMatchObject({ bondAmount: '250', feeAmount: '30', maxDeadlineDelta: '144' });
+  });
+
+  it('an empty body publishes the default bond, and invalid JSON is a 400', async () => {
+    ctxWith('42');
+    const empty = await adminOffer(new Request('http://test/api', { method: 'POST' }));
+    expect(empty.status).toBe(201);
+    const bad = await adminOffer(new Request('http://test/api', {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: '{bond:',
+    }));
+    expect(bad.status).toBe(400);
+    expect((await bad.json()).error).toMatch(/JSON/);
   });
 });

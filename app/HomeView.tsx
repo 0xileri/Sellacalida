@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import type { AgentView, StatsView } from '@/lib/wire';
+import type { AgentView, ShowcaseExample, StatsView } from '@/lib/wire';
 import { useConfig } from './providers';
 import { usePoll } from './ui/hooks';
 import { Amount, Card, CopyText, Disclosure, Pill } from './ui/bits';
@@ -39,6 +39,49 @@ function Stat({ label, value, tone }: { label: string; value: number | string; t
   );
 }
 
+const EXAMPLE_KIND: Record<ShowcaseExample['kind'], string> = {
+  pass: 'PASS',
+  fail: 'FAIL',
+  noresponse: 'NORESPONSE',
+  tip: 'muted',
+};
+
+function MainnetExamples() {
+  const c = useConfig();
+  if (!c) return null;
+  if (c.examples.length === 0) {
+    if (c.network !== 'mainnet') return null;
+    return (
+      <section>
+        <h2 className="label mb-3">On mainnet</h2>
+        <Card>
+          <p className="text-sm text-[var(--muted)]">A pass and a fail, with explorer links, will show here once they are recorded.</p>
+        </Card>
+      </section>
+    );
+  }
+  return (
+    <section>
+      <h2 className="label mb-3">On mainnet</h2>
+      <div className="grid gap-3 sm:grid-cols-2">
+        {c.examples.map((ex) => (
+          <a
+            key={ex.kind}
+            href={ex.href}
+            target="_blank"
+            rel="noreferrer"
+            className="rounded-lg border border-[var(--line)] bg-[var(--panel)] p-4 hover:border-[var(--accent)]"
+          >
+            <Pill kind={EXAMPLE_KIND[ex.kind]}>{ex.label}</Pill>
+            <div className="mt-2 break-all font-mono text-xs text-[var(--muted)]">{ex.txid}</div>
+            <div className="mt-2 text-sm">View on the explorer</div>
+          </a>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 const STEPS = [
   ['Bond', 'The agent locks its own tokens in a Bitcoin Cash contract and publishes the offer.'],
   ['Accept', 'You add a fee and a question it should get right, in one transaction from your wallet.'],
@@ -48,8 +91,8 @@ const STEPS = [
 
 export default function HomeView() {
   const c = useConfig();
-  const { data: stats } = usePoll<StatsView>('/api/stats', 5000);
-  const { data: agent } = usePoll<AgentView>(c ? `/api/agents/${c.featuredAgentId}` : null, 8000);
+  const { data: stats, error: statsError } = usePoll<StatsView>('/api/stats', 5000);
+  const { data: agent, error: agentError } = usePoll<AgentView>(c ? `/api/agents/${c.featuredAgentId}` : null, 8000);
   const s = stats?.challenges;
 
   return (
@@ -70,13 +113,16 @@ export default function HomeView() {
           </div>
         </section>
 
-        <section className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+        {statsError && <p className="text-sm text-[var(--bad)]">{statsError}</p>}
+        <section className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
           <Stat label="Open bonds" value={stats?.openOffers ?? '·'} />
           <Stat label="Challenges" value={s?.total ?? '·'} />
           <Stat label="Pass" value={s?.pass ?? '·'} tone="text-[var(--good)]" />
           <Stat label="Fail" value={s?.fail ?? '·'} tone="text-[var(--bad)]" />
           <Stat label="No response" value={s?.noResponse ?? '·'} tone="text-[var(--warn)]" />
         </section>
+
+        <MainnetExamples />
 
         <section>
           <h2 className="label mb-3">How a challenge works</h2>
@@ -91,6 +137,12 @@ export default function HomeView() {
           </ol>
         </section>
 
+        {agentError && !agent && (
+          <Card>
+            <div className="label">Featured agent</div>
+            <p className="mt-2 text-sm text-[var(--muted)]">No agent profile yet. It appears once the server has a wallet configured.</p>
+          </Card>
+        )}
         {agent && (
           <Card>
             <div className="flex flex-wrap items-start justify-between gap-4">

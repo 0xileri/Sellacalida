@@ -174,13 +174,13 @@ export default function AcceptPanel({ offer, onClose }: { offer: OfferView; onCl
       {error && <p className="text-sm text-[var(--bad)]">{error}</p>}
       <div className="flex flex-wrap items-center gap-3">
         {isDev ? (
-          <button className="btn" onClick={() => void submit()} disabled={busy || !spec || problems.length > 0}>
+          <button className="btn min-h-11 w-full sm:w-auto" onClick={() => void submit()} disabled={busy || !spec || problems.length > 0}>
             Run it on mocknet (dev challenger)
           </button>
         ) : wc.state !== 'connected' ? (
-          <button className="btn" onClick={() => wc.connect()}>Connect wallet to challenge</button>
+          <button className="btn min-h-11 w-full sm:w-auto" onClick={() => wc.connect()}>Connect wallet to challenge</button>
         ) : (
-          <button className="btn" onClick={() => void submit()} disabled={busy || !spec || problems.length > 0 || !address}>
+          <button className="btn min-h-11 w-full sm:w-auto" onClick={() => void submit()} disabled={busy || !spec || problems.length > 0 || !address}>
             Lock fee and challenge
           </button>
         )}

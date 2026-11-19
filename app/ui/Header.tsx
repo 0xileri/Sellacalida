@@ -18,7 +18,7 @@ function ConnectButton() {
   }
   const waiting = wc.state === 'connecting' || wc.state === 'reconnecting';
   return (
-    <button className="btn text-sm" onClick={() => wc.connect()} disabled={waiting}>
+    <button className="btn min-h-11 text-sm sm:min-h-0" onClick={() => wc.connect()} disabled={waiting}>
       {waiting ? 'Waiting for wallet…' : 'Connect wallet'}
     </button>
   );
@@ -55,7 +55,7 @@ export default function Header() {
   ];
   return (
     <header className="sticky top-0 z-20 border-b border-[var(--line)] bg-[var(--background)]/90 backdrop-blur">
-      <div className="mx-auto flex max-w-5xl items-center gap-3 px-4 py-3">
+      <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3">
         <Link href="/" className="font-semibold tracking-tight">
           Sella<span className="text-[var(--accent)]">calida</span>
         </Link>
