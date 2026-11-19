@@ -8,7 +8,7 @@ import { hexToBin, sha256, utf8ToBin } from '@bitauth/libauth';
 import type { SpendableUtxo } from 'cashscript';
 import { PUSD_CATEGORY_MAINNET, type SellacalidaNetwork } from '@/lib/constants';
 import { makeOfferContract, type ChallengeTerms, type OfferParams } from '@/lib/contracts';
-import { addressToLockingBytecode } from '@/lib/bch/address';
+import { addressToLockingBytecode, withNetworkPrefix } from '@/lib/bch/address';
 import { explorerTxUrl, makeProvider } from '@/lib/bch/network';
 import {
   deriveAddresses, fetchWalletUtxos, signWithWallet, summarize, type WalletAddress, type WalletUtxo,
@@ -242,7 +242,7 @@ export default function ConnectSpike() {
     run('BCH tip (native send)', () => {
       if (!change0) throw new Error('connect first');
       return buildBchTip({
-        provider, walletUtxos: utxos, toLockingBytecode: addressToLockingBytecode(tipTo.trim()), amount: BigInt(tipSats), change: change0,
+        provider, walletUtxos: utxos, toLockingBytecode: addressToLockingBytecode(withNetworkPrefix(tipTo, network)), amount: BigInt(tipSats), change: change0,
       });
     });
 
