@@ -6,36 +6,38 @@ The app is one long-running Node process (`next build` then `next start`). It ho
 
 Project `sellacalida`, both services deploy from `main` on every push (Railpack: Node from `package.json` `engines`, `npm install`, `npm run build`, `npm run start`; health check `GET /api/config`; restart on failure, 5 retries).
 
-| Service | Network | What it is |
-| --- | --- | --- |
-| `web` | **mainnet** | The real thing: PUSD bonds, WizardConnect accepts, verifier-signed settles. The submission link. |
-| `play` | mocknet | Play money, no wallet needed: visitors run challenges through a throwaway challenger key. Resets on every restart. |
+| Site | Network | Railway service | What it is |
+| --- | --- | --- | --- |
+| **https://sellacalida.up.railway.app** | **mainnet** | `play` (the name is historical; rename it in the dashboard if you like) | The real thing: PUSD bonds, WizardConnect accepts, verifier-signed settles. The submission link. |
+| https://web-production-20dba597.up.railway.app | mocknet | `web` | Play money, no wallet needed: visitors run challenges through a throwaway challenger key. Resets on every restart. |
 
-Each links to the other (`PLAY_URL` on `web`, `LIVE_URL` on `play`), in the header and the home banner.
+The keys and the volume ended up on the service named `play`, so that service became mainnet on 19 Nov and the older `web` service kept the play-money role. Each site links to the other (`PLAY_URL` on the mainnet one, `LIVE_URL` on the play one), in the header and the home banner.
 
-### `web` (mainnet)
+The tables below describe each role. Read "the mainnet service" for `play` and "the play service" for `web`.
+
+### Mainnet role (Railway service `play`, sellacalida.up.railway.app)
 
 1. On your machine, make fresh keys: `npm run keys` (Windows: `npm.cmd run keys`). It prints them once and saves nothing.
-2. Paste `AGENT_WIF`, `VERIFIER_PRIVATE_KEY` and `FEE_WALLET_WIF` into Railway > `web` > Variables. Never into a chat or a commit.
-3. Fund the agent's `bitcoincash:z...` address with a little PUSD and BCH (about 2 PUSD and 100,000 sats), and the fee wallet with about 20,000 sats.
-4. A volume mounted at `/app/data`, so offers, challenges and answers survive restarts.
+2. Paste `AGENT_WIF`, `VERIFIER_PRIVATE_KEY` and `FEE_WALLET_WIF` into Railway > the mainnet service > Variables. Never into a chat or a commit.
+3. Fund the agent's `bitcoincash:z...` address with a little PUSD and BCH (with the live 0.50 bond: about 0.75 PUSD and 100,000 sats), and the fee wallet with about 20,000 sats.
+4. A volume mounted at `/app/data` (`sellacalida-mainnet-data`), so offers, challenges and answers survive restarts.
 
 | Variable | Value |
 | --- | --- |
 | `NETWORK` | `mainnet` (token forced to PUSD mainnet-v1, 2 decimals) |
 | `DATA_DIR` | `/app/data` |
 | `AGENT_WIF`, `VERIFIER_PRIVATE_KEY`, `FEE_WALLET_WIF` | from `npm run keys`, pasted by you |
-| `OFFER_BOND`, `OFFER_FEE` | `100`, `20` (1.00 / 0.20 PUSD, the spec's demo size; 100 is the mainnet cap) |
+| `OFFER_BOND`, `OFFER_FEE` | `50`, `10` (0.50 / 0.10 PUSD, live since 19 Nov; the spec's demo size is 100 / 20, and 100 is the mainnet cap) |
 | `AUTO_OFFERS` | `1` |
 | `VERIFIER_TICK_MS` | `20000` |
 | `LLM_BASE_URL`, `LLM_MODEL_ID`, `LLM_API_KEY` | Orbio, `anthropic/claude-sonnet-5.5`, your key |
 | `ADMIN_TOKEN` | random; guards `/api/admin/*` |
-| `PLAY_URL` | the `play` service's URL |
+| `PLAY_URL` | `https://web-production-20dba597.up.railway.app` |
 | `NEXT_PUBLIC_REPO_URL`, `NEXT_PUBLIC_DECK_URL`, `NEXT_PUBLIC_EMBER_ADDRESS` | home-page banner |
 
 On mainnet the app refuses bonds above 1.00 PUSD, refuses to publish while the agent holds more than 1,000,000 sats or 20 PUSD, refuses keys made for another network, and stops the verifier loop if the Electrum server is on the wrong network.
 
-### `play` (mocknet)
+### Play-money role (Railway service `web`, web-production-20dba597.up.railway.app)
 
 | Variable | Value |
 | --- | --- |
@@ -45,11 +47,11 @@ On mainnet the app refuses bonds above 1.00 PUSD, refuses to publish while the a
 | `AUTO_OFFERS` | `3` |
 | `VERIFIER_TICK_MS` | `5000` |
 | `LLM_BASE_URL`, `LLM_MODEL_ID` | as on `web` |
-| `LLM_API_KEY` | `${{web.LLM_API_KEY}}` (a Railway reference, so the key lives in one place) |
+| `LLM_API_KEY` | your key on `web`; the mainnet service reads it as `${{web.LLM_API_KEY}}`, so it lives in one place |
 | `ADMIN_TOKEN` | its own random value |
-| `LIVE_URL` | the `web` service's URL |
+| `LIVE_URL` | `https://sellacalida.up.railway.app` |
 
-No `AGENT_WIF`, `VERIFIER_PRIVATE_KEY` or `FEE_WALLET_WIF` here: mocknet uses built-in play keys.
+No `AGENT_WIF`, `VERIFIER_PRIVATE_KEY` or `FEE_WALLET_WIF` on the play-money service: mocknet uses built-in play keys.
 
 ## Switching to chipnet
 
