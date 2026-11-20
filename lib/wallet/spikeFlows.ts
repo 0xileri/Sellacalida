@@ -106,6 +106,24 @@ export function buildCancelWithPlaceholders(o: {
 }
 
 /**
+ * Which wallet address should challenge: the accept contract requires the fee to come from a coin
+ * at P2PKH(challengerPkh), so the challenger is the address that holds a bond-token coin >= the fee.
+ * receive/0 is preferred; otherwise the first receive, then change, address that has one. Wallets
+ * often put token change on a change address (19 Nov: Paytaca's PUSD change was not on receive/0).
+ */
+export function chooseChallenger(addresses: WalletAddress[], utxos: WalletUtxo[], category: string, fee: bigint): WalletAddress {
+  const coins = utxos.filter((u) => u.token?.category === category && !u.token.nft);
+  const order = [...addresses].sort((a, b) => (a.path === b.path ? a.index - b.index : a.path === 'receive' ? -1 : 1));
+  const found = order.find((a) => coins.some((u) => u.address === a.address && u.token!.amount >= fee));
+  if (found) return found;
+  const total = coins.reduce((s, u) => s + u.token!.amount, 0n);
+  if (total >= fee) {
+    throw new Error(`your ${total} base units of the bond token are split into coins smaller than the ${fee} fee; send them to yourself in one coin first`);
+  }
+  throw new Error(`this wallet holds ${total} base units of the bond token across its first ${addresses.length} addresses; the fee is ${fee}`);
+}
+
+/**
  * Spike steps 4 + 6 / challenger flow: accept an offer. The offer input is fully unlocked by
  * CashScript and left out of inputPaths; the wallet signs only its own token (and BCH) inputs.
  */
