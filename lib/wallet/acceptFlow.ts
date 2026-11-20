@@ -7,8 +7,8 @@ import { makeOfferContract } from '../contracts';
 import { addressToLockingBytecode } from '../bch/address';
 import { makeProvider } from '../bch/network';
 import { offerParamsFromWire, termsFromWire, type AcceptBundle } from '../wire';
-import { buildAcceptFromWallet, buildBchTip } from './spikeFlows';
-import { deriveAddresses, fetchWalletUtxos, signWithWallet } from './wizard';
+import { buildAcceptFromWallet, buildBchTip, chooseChallenger } from './spikeFlows';
+import { deriveAddresses, fetchWalletUtxos, signWithWallet, type WalletAddress } from './wizard';
 
 export type Step = 'loading wallet' | 'building' | 'waiting for wallet signature' | 'broadcasting';
 
@@ -16,6 +16,19 @@ export async function walletReceiveAddress(manager: DappConnectionManager, netwo
   const r0 = deriveAddresses(manager, network, { receive: 1, change: 0 })[0];
   if (!r0) throw new Error('wallet has not shared its receive path yet; try again in a moment');
   return r0;
+}
+
+/** The wallet address to challenge from: the one holding a bond-token coin that covers the fee. */
+export async function pickChallengerAddress(o: {
+  manager: DappConnectionManager;
+  network: SellacalidaNetwork;
+  category: string;
+  fee: bigint;
+}): Promise<WalletAddress> {
+  const provider = makeProvider(o.network);
+  const addresses = deriveAddresses(o.manager, o.network);
+  const utxos = await fetchWalletUtxos(provider, addresses);
+  return chooseChallenger(addresses, utxos, o.category, o.fee);
 }
 
 export async function signAndBroadcastAccept(o: {
@@ -28,13 +41,13 @@ export async function signAndBroadcastAccept(o: {
   o.onStep?.('loading wallet');
   const addresses = deriveAddresses(o.manager, o.network);
   const utxos = await fetchWalletUtxos(provider, addresses);
-  const challenger = addresses.find((a) => a.path === 'receive' && a.index === 0);
-  if (!challenger) throw new Error('wallet has not shared its receive path');
+  const terms = termsFromWire(o.bundle.terms);
+  // the server fixed the challenger when it prepared the challenge (see pickChallengerAddress)
+  const challenger = addresses.find((a) => binToHex(a.pkh) === binToHex(terms.challengerPkh));
+  if (!challenger) throw new Error('this wallet is not the challenger the server prepared');
 
   o.onStep?.('building');
   const offer = offerParamsFromWire(o.bundle.offer.params);
-  const terms = termsFromWire(o.bundle.terms);
-  if (binToHex(challenger.pkh) !== binToHex(terms.challengerPkh)) throw new Error('this wallet is not the challenger the server prepared');
   const contract = makeOfferContract(offer, provider);
   const tx = buildAcceptFromWallet({
     provider, offer, challenger, walletUtxos: utxos, locktime: o.bundle.locktime,

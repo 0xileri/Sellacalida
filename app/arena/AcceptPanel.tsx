@@ -70,9 +70,16 @@ export default function AcceptPanel({ offer, onClose }: { offer: OfferView; onCl
         id = (await postJson<ChallengeView>('/api/admin/dev/challenge', { offerId: offer.id, spec })).id;
       } else {
         if (!wc.manager || !address) throw new Error('connect your wallet first');
+        setStep('finding your PUSD');
+        const { pickChallengerAddress, signAndBroadcastAccept } = await import('@/lib/wallet/acceptFlow');
+        // challenge from the wallet address that actually holds a coin covering the fee
+        const challenger = await pickChallengerAddress({
+          manager: wc.manager, network, category: offer.params.tokenCategory, fee: BigInt(offer.params.feeAmount),
+        });
         setStep('checking the challenge');
-        const { bundle } = await postJson<{ bundle: AcceptBundle }>('/api/challenges', { offerId: offer.id, spec, challengerAddress: address });
-        const { signAndBroadcastAccept } = await import('@/lib/wallet/acceptFlow');
+        const { bundle } = await postJson<{ bundle: AcceptBundle }>('/api/challenges', {
+          offerId: offer.id, spec, challengerAddress: challenger.tokenAddress,
+        });
         const accepted = await signAndBroadcastAccept({ manager: wc.manager, network, bundle, onStep: (s) => setStep(s) });
         setStep('confirming on chain');
         for (let i = 0; ; i++) {

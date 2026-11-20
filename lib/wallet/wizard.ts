@@ -31,7 +31,7 @@ export interface WalletUtxo extends SpendableUtxo {
 export function deriveAddresses(
   manager: DappConnectionManager,
   network: SellacalidaNetwork,
-  counts: Record<WalletPath, number> = { receive: 10, change: 5 },
+  counts: Record<WalletPath, number> = { receive: 20, change: 10 },
 ): WalletAddress[] {
   const out: WalletAddress[] = [];
   for (const path of ['receive', 'change'] as const) {

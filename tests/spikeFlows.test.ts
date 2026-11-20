@@ -7,7 +7,7 @@ import type { MockNetworkProvider } from 'cashscript';
 import { pkhToCashAddress, withNetworkPrefix } from '@/lib/bch/address';
 import { makeEscrowContract, makeOfferContract, escrowArgsFor } from '@/lib/contracts';
 import {
-  buildAcceptFromWallet, buildBchTip, buildCancelWithPlaceholders, buildFundOffer, buildKeylessTimeout,
+  buildAcceptFromWallet, buildBchTip, buildCancelWithPlaceholders, buildFundOffer, buildKeylessTimeout, chooseChallenger,
   SPIKE_OFFER_SATS,
 } from '@/lib/wallet/spikeFlows';
 import { relaySignRequest, signWithWallet, type WalletAddress, type WalletUtxo } from '@/lib/wallet/wizard';
@@ -165,5 +165,45 @@ describe('sign requests survive the WizardConnect relay (17 Nov: "Do not know ho
     expect(withNetworkPrefix('  qzul2y8c9t00n5q20ywk2fwtpepx6fhk059s6dptln ', 'mainnet')).toBe('bitcoincash:qzul2y8c9t00n5q20ywk2fwtpepx6fhk059s6dptln');
     expect(withNetworkPrefix('bitcoincash:qzul2y8c9t00n5q20ywk2fwtpepx6fhk059s6dptln', 'mainnet')).toBe('bitcoincash:qzul2y8c9t00n5q20ywk2fwtpepx6fhk059s6dptln');
     expect(withNetworkPrefix('qq', 'chipnet')).toBe('bchtest:qq');
+  });
+});
+
+describe('which wallet address challenges (20 Nov: "no UTXO at <receive/0> holds >= 10 of the token")', () => {
+  const coin = (a: WalletAddress, amount: bigint, extra: Partial<WalletUtxo> = {}): WalletUtxo => ({
+    txid: binToHex(sha256.hash(utf8ToBin(`${a.address}:${amount}:${extra.vout ?? 0}`))), vout: 0, satoshis: 1000n,
+    lockingBytecode: binToHex(a.lock), token: { category: CATEGORY, amount }, path: a.path, index: a.index, address: a.address, ...extra,
+  });
+  const all = [r0, r1, c0];
+
+  it('prefers receive/0 when it holds a coin covering the fee', () => {
+    expect(chooseChallenger(all, [coin(r0, 50n), coin(c0, 90n)], CATEGORY, 10n)).toBe(r0);
+  });
+
+  it('otherwise the address that does: Paytaca had put its PUSD change on another address', () => {
+    expect(chooseChallenger(all, [coin(r0, 5n), coin(c0, 23n)], CATEGORY, 10n)).toBe(c0);
+    expect(chooseChallenger(all, [coin(c0, 23n), coin(r1, 12n)], CATEGORY, 10n)).toBe(r1); // receive before change
+  });
+
+  it('ignores other tokens and NFTs, and says why when nothing covers the fee', () => {
+    const other = { ...coin(r0, 999n), token: { category: 'ab'.repeat(32), amount: 999n } };
+    const nft = { ...coin(r1, 50n), token: { category: CATEGORY, amount: 50n, nft: { capability: 'none' as const, commitment: '' } } };
+    expect(() => chooseChallenger(all, [other, nft], CATEGORY, 10n)).toThrow(/holds 0 base units .* first 3 addresses; the fee is 10/);
+    expect(() => chooseChallenger(all, [coin(r0, 4n), coin(r1, 4n), coin(c0, 4n)], CATEGORY, 10n))
+      .toThrow(/12 base units .* split into coins smaller than the 10 fee/);
+  });
+
+  it('the chosen address can really accept: input 1 from receive/1, signed through the relay', async () => {
+    const { provider, offer } = setup();
+    await signAndSend(provider, buildFundOffer({ provider, offer, walletUtxos: await walletUtxos(provider), tokenChange: r0, bchChange: c0 }));
+    const [offerUtxo] = await makeOfferContract(offer, provider).getUtxos();
+    const utxos = (await walletUtxos(provider)).filter((u) => !(u.address === r0.address && u.token));
+    const challenger = chooseChallenger(all, utxos, CATEGORY, offer.feeAmount);
+    expect(challenger).toBe(r1);
+    const tx = buildAcceptFromWallet({
+      provider, offer, offerUtxo, challenger, walletUtxos: utxos, locktime: START_HEIGHT,
+      terms: { challengeId: sha256.hash(utf8ToBin('pick')), specHash: sha256.hash(utf8ToBin('spec')), expiryHeight: BigInt(START_HEIGHT + 100) },
+    });
+    await signAndSend(provider, tx);
+    expect((await makeEscrowContract(escrowArgsFor(offer, tx.terms), provider).getUtxos())).toHaveLength(1);
   });
 });
