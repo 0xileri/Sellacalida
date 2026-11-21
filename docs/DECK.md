@@ -85,7 +85,7 @@ Image (where the template has its code screenshot): the flow diagram, `deck-flow
 - Play money, no wallet needed: https://web-production-20dba597.up.railway.app
 - Repo: https://github.com/0xileri/Sellacalida
 - 90-second video: <link>
-- EMBER2026 votes: <your CashTokens address>
+- EMBER2026 votes: bitcoincash:zqufwwepurkeq8m22jv9afxndl7s4ml6ss25yu0lj4
 - Mainnet accept: https://explorer.bch.ninja/tx/e246074142c8a0410c9ebdae596a8a49d053dc825eda6b83245e816b0d3a71b6
 - Mainnet settle (PASS): https://explorer.bch.ninja/tx/ddfa5384d090cd2bb0ba904e730fbe47681152346ac9a812dbb3b0ef54633c6d
 - Mainnet settle (FAIL, challenger paid): https://explorer.bch.ninja/tx/7d247f9646d6e18e21c2eb1b32fb8c5fc4131e186937579a57d256836b6d08a7
