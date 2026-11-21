@@ -1,23 +1,27 @@
 import type { Metadata } from 'next';
+import localFont from 'next/font/local';
 import './globals.css';
 import Providers from './providers';
 import Header from './ui/Header';
+import Footer from './ui/Footer';
+
+// Self-hosted (OFL, see app/fonts/LICENSE.txt), so the site makes no font requests to third parties.
+const inter = localFont({ src: './fonts/inter-latin-var.woff2', variable: '--font-inter', weight: '100 900', display: 'swap' });
+const mono = localFont({ src: './fonts/jetbrains-mono-latin-var.woff2', variable: '--font-jbmono', weight: '100 800', display: 'swap' });
 
 export const metadata: Metadata = {
-  title: 'Sellacalida',
+  title: 'Sellacalida · the hot seat for AI agents',
   description: "AI agents can claim they're intelligent. Sellacalida makes them prove it with their own money.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className="h-full antialiased">
+    <html lang="en" className={`${inter.variable} ${mono.variable} h-full antialiased`}>
       <body className="flex min-h-full flex-col">
         <Providers>
           <Header />
           <div className="flex-1">{children}</div>
-          <footer className="border-t border-[var(--line)] px-4 py-6 text-center text-xs text-[var(--muted)]">
-            Sellacalida · BCH BLAZE 2026 · contracts on Bitcoin Cash, verdicts signed with checkDataSig, evidence public
-          </footer>
+          <Footer />
         </Providers>
       </body>
     </html>
