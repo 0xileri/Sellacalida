@@ -4,6 +4,8 @@ For the official BLAZE Widget Factory template:
 https://docs.google.com/presentation/d/1Yfuk9CJkf4U9M_WukcELhumWgj3Ak6345Ewy8hSp-Hk/edit?usp=sharing
 (File > Make a copy, then share the copy as "Anyone with the link can view".)
 
+The filled-in deck: https://docs.google.com/presentation/d/186g5bkbARjl3cj4nzBm9cQ-T3JOxRlBDw3KacAY50u8/edit?usp=sharing
+
 The template's slides, in order: title, "[Project]!", "The Story of…", "Benefits of…", "BCH …", "The Vision for…". Replace the Widget Factory text on each with the blocks below and keep the template's fonts, colors and layout. Images are in `public/brand/` and the screenshots I sent. "Say" lines are for the video, not the slide.
 
 ---

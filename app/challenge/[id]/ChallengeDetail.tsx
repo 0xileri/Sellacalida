@@ -11,7 +11,7 @@ import { Amount, Card, CopyText, Disclosure, Pill, SourceBadge, TxLink, short, v
 
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="grid grid-cols-[8.5rem_1fr] gap-2 border-t border-[var(--line)] py-2 text-sm first:border-t-0">
+    <div className="grid grid-cols-[8.5rem_minmax(0,1fr)] gap-2 border-t border-[var(--line)] py-2 text-sm first:border-t-0">
       <div className="text-[var(--muted)]">{label}</div>
       <div className="min-w-0 break-words">{children}</div>
     </div>
@@ -26,9 +26,9 @@ function Trace({ check }: { check: NonNullable<EvidenceView['check']> }) {
         {t.steps.map((s, i) => (
           <li key={i} className="flex flex-wrap gap-2">
             <span className="text-[var(--muted)]">{i + 1}.</span>
-            <span>{s.expr}</span>
+            <span className="min-w-0 break-all">{s.expr}</span>
             <span className="text-[var(--muted)]">=</span>
-            <span>{s.value}</span>
+            <span className="min-w-0 break-all">{s.value}</span>
           </li>
         ))}
       </ol>
@@ -104,11 +104,12 @@ export default function ChallengeDetail({ params }: { params: Promise<{ id: stri
         {c.lastError && !settled && <p className="text-sm text-[var(--warn)]">{c.lastError}</p>}
       </header>
 
-      <div className="grid gap-6 lg:grid-cols-[3fr_2fr]">
-        <div className="flex flex-col gap-6">
+      {/* minmax(0, …): a long unbroken number on the left must not squeeze the right column to one character */}
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+        <div className="flex min-w-0 flex-col gap-6">
           <Card>
             <h2 className="label mb-2">The question</h2>
-            <pre className="whitespace-pre-wrap font-mono text-sm leading-relaxed">{c.prompt}</pre>
+            <pre className="whitespace-pre-wrap break-words font-mono text-sm leading-relaxed">{c.prompt}</pre>
             <details className="mt-3 text-xs">
               <summary className="cursor-pointer text-[var(--muted)]">Canonical spec (its sha256 is bound into the escrow)</summary>
               <pre className="mt-2 overflow-x-auto rounded bg-[var(--background)] p-2 font-mono">{c.specJson}</pre>
@@ -124,7 +125,7 @@ export default function ChallengeDetail({ params }: { params: Promise<{ id: stri
             ) : (
               <div className="flex flex-col gap-3">
                 <div className="flex flex-wrap items-center gap-3">
-                  <span className="font-mono text-3xl font-semibold">{c.answer.canonicalAnswer || '(unparseable)'}</span>
+                  <span className="min-w-0 break-all font-mono text-3xl font-semibold">{c.answer.canonicalAnswer || '(unparseable)'}</span>
                   <SourceBadge source={c.answer.source} modelId={c.answer.modelId} />
                 </div>
                 <details className="text-sm">
@@ -163,9 +164,9 @@ export default function ChallengeDetail({ params }: { params: Promise<{ id: stri
                 <div className="flex flex-wrap items-center gap-3">
                   <Pill kind={ev.verdict}>{ev.verdict}</Pill>
                   {ev.check ? (
-                    <span className="text-sm">
-                      Expected <span className="font-mono font-semibold">{ev.check.expected}</span>, agent said{' '}
-                      <span className="font-mono font-semibold">{c.answer?.canonicalAnswer || '(nothing parseable)'}</span>
+                    <span className="min-w-0 text-sm">
+                      Expected <span className="break-all font-mono font-semibold">{ev.check.expected}</span>, agent said{' '}
+                      <span className="break-all font-mono font-semibold">{c.answer?.canonicalAnswer || '(nothing parseable)'}</span>
                     </span>
                   ) : (
                     <span className="text-sm">No answer was committed before the answer deadline.</span>
@@ -192,12 +193,12 @@ export default function ChallengeDetail({ params }: { params: Promise<{ id: stri
           </Card>
         </div>
 
-        <div className="flex flex-col gap-6">
+        <div className="flex min-w-0 flex-col gap-6">
           <Card>
             <h2 className="label mb-2">Money</h2>
             <Row label="Agent bond"><Amount base={c.bondAmount} /></Row>
             <Row label="Challenger fee"><Amount base={c.feeAmount} /></Row>
-            <Row label="Challenger"><span className="font-mono text-xs">{c.challengerAddress}</span></Row>
+            <Row label="Challenger"><span className="break-all font-mono text-xs">{c.challengerAddress}</span></Row>
             <div className="mt-3 text-sm"><Payout c={c} /></div>
           </Card>
           <Card>
