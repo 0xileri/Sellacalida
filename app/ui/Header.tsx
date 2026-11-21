@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import { Suspense } from 'react';
 import { useConfig, useWallet } from '../providers';
 import { NetworkBadge, short } from './bits';
+import { LogoMark } from './Logo';
 
 function ConnectButton() {
   const { wc, address } = useWallet();
@@ -70,8 +71,11 @@ export default function Header() {
   return (
     <header className="sticky top-0 z-20 border-b border-[var(--line)] bg-[var(--background)]/90 backdrop-blur">
       <div className="mx-auto flex max-w-5xl items-center gap-3 px-4 py-3">
-        <Link href="/" className="font-semibold tracking-tight">
-          Sella<span className="text-[var(--accent)]">calida</span>
+        <Link href="/" className="flex items-center gap-2 font-semibold tracking-tight">
+          <LogoMark size={24} className="text-[var(--foreground)]" />
+          <span>
+            Sella<span className="text-[var(--accent)]">calida</span>
+          </span>
         </Link>
         <Suspense fallback={<NavLinks items={items} active={null} />}>
           <ActiveNav items={items} />
