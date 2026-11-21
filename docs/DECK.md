@@ -115,7 +115,7 @@ The contract enforces the money. The verifier signs a reproducible test, or no-r
 - Mainnet accept: https://explorer.bch.ninja/tx/e246074142c8a0410c9ebdae596a8a49d053dc825eda6b83245e816b0d3a71b6
 - Mainnet settle (PASS): https://explorer.bch.ninja/tx/ddfa5384d090cd2bb0ba904e730fbe47681152346ac9a812dbb3b0ef54633c6d
 - Mainnet settle (FAIL, challenger paid): https://explorer.bch.ninja/tx/7d247f9646d6e18e21c2eb1b32fb8c5fc4131e186937579a57d256836b6d08a7
-- BCH tip: <txid after you tip the agent>
+- BCH tip: https://explorer.bch.ninja/tx/8b165cd3022fa8fa839641f7bce636e46fcb4bc33a0e9573cdbae61f86a728b6
 
 ---
 

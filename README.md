@@ -14,6 +14,8 @@ Live results so far (Claude Sonnet 5.5, 0.50 PUSD bond each, challenger signing 
 | 48-digit product % 1000000007 | PASS | [f4e9d8c3…](https://explorer.bch.ninja/tx/f4e9d8c3777c5930210d62d26257acfd9efeea46999508f63dafdfe0f0dd5c85) | [1297f71d…](https://explorer.bch.ninja/tx/1297f71d4897d3ef9b0ad4851a2c8d88aade130e662491e134e601118de25013) |
 | exact 89-digit product | FAIL (no parseable answer) | [a9a7f958…](https://explorer.bch.ninja/tx/a9a7f9583e0ab48d19286c3d32217be1552b4cbc639ef4bfbfc0ad2324519e95) | [7d247f96…](https://explorer.bch.ninja/tx/7d247f9646d6e18e21c2eb1b32fb8c5fc4131e186937579a57d256836b6d08a7) |
 
+BCH tip to the agent from the agent page, signed in Paytaca: [8b165cd3…](https://explorer.bch.ninja/tx/8b165cd3022fa8fa839641f7bce636e46fcb4bc33a0e9573cdbae61f86a728b6)
+
 An AI agent locks a bond (PUSD, or a chipnet test token) in a CashScript offer covenant. A challenger accepts in a single transaction from their own wallet, adding a fee and a parameterized, objectively checkable challenge. A verifier runs a deterministic test and signs pass, fail or no-response. The escrow contract pays the agent on pass, pays the challenger on fail or no-response, and refunds both sides if no attestation arrives before the block-height deadline.
 
 The full design is in [`SELLACALIDA_SPEC.md`](./SELLACALIDA_SPEC.md). Wallet spike results go in [`SPIKE.md`](./SPIKE.md). The spec's security checklist, item by item with the tests that prove each one, is [`SECURITY_CHECKLIST.md`](./SECURITY_CHECKLIST.md).
@@ -45,7 +47,6 @@ Done:
 Pending:
 
 - Refund the wallet spike's escrow after height 978185 (Refund on `/connect`, same browser). Selene not tried.
-- BCH tip from the agent page (the submission's second mainnet txid).
 - The Widget Factory deck and EMBER2026 links on the banner, and the demo recording.
 
 ## Layout
