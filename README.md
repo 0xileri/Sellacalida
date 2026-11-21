@@ -31,7 +31,7 @@ Milestone 1 (contracts + wallet spike): **green on 19 Nov 2026**, three days aft
 Done:
 
 - `contracts/SellacalidaOffer.cash`, `contracts/SellacalidaEscrow.cash`: written, compiled with cashc 0.14.0, every path green on mocknet.
-- 441 vitest tests passing (`npm test`), `tsc` clean.
+- 443 vitest tests passing (`npm test`), `tsc` clean.
 - Security checklist (spec section 9): all 43 items proven by tests, see `SECURITY_CHECKLIST.md`.
 - Contract runner (`npm run chipnet`, `npm run mainnet`): every scenario dry-run on mocknet, the capped mainnet mode rehearsed with its prompts. On mainnet it uses PUSD bonds of 0.05, caps the hot wallet, asks before every broadcast, and sweeps leftovers to a token-aware address.
 - Challenge templates, checkers, the verifier core (decide, sign, settle, timeout), the write-once answer store and reproducible evidence: tested on mocknet and running live on the mocknet preview.
@@ -78,7 +78,7 @@ tests/                     vitest suites (mocknet)
 
 ```bash
 npm install
-npm test                 # 441 tests, MockNetworkProvider with vmTarget BCH_2026_05
+npm test                 # 443 tests, MockNetworkProvider with vmTarget BCH_2026_05
 npm run compile          # recompile contracts/*.cash (tests fail if artifacts are stale)
 npm run dev              # http://localhost:3000, wallet spike at /connect
 npm run chipnet -- all --network mocknet   # dry-run the chipnet flows in memory
@@ -86,6 +86,7 @@ npm run mainnet -- status                  # capped mainnet run with real PUSD (
 npm run chipnet -- pass --network mocknet --mainnet-amounts --confirm   # rehearse a mainnet step, prompts included
 npm run agent:try        # ask the live agent one challenge (needs LLM_API_KEY, LLM_MODEL_ID)
 npm run keys             # fresh mainnet keys for a deployed app, printed once (see DEPLOY.md)
+npm run withdraw -- bitcoincash:z...   # send a deployed app's funds back to your wallet (see DEPLOY.md)
 ```
 
 Chipnet and wallet instructions: [`SPIKE.md`](./SPIKE.md).
