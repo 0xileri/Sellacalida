@@ -102,9 +102,12 @@ export function openAiCompatibleClient(o: OpenAiCompatibleOptions): LlmClient {
           usage?: { prompt_tokens?: number; completion_tokens?: number; cost?: number };
         };
         const choice = body.choices?.[0];
-        const content = typeof choice?.message?.content === 'string' ? choice.message.content : null;
-        const toolCalls = (choice?.message?.tool_calls ?? []).filter((t) => t?.type === 'function' && t.function?.name);
-        if (content === null && toolCalls.length === 0) throw new Error('LLM response has no choices[0].message content or tool calls');
+        if (!choice) throw new Error('LLM response has no choices');
+        const toolCalls = (choice.message?.tool_calls ?? []).filter((t) => t?.type === 'function' && t.function?.name);
+        // A well-formed reply with no text and no tool calls (for example the model used its whole token
+        // budget thinking, finish_reason "length") is the model's answer: empty. It is committed and
+        // fails like any unparseable answer, instead of being retried as if the network had failed.
+        const content = typeof choice.message?.content === 'string' ? choice.message.content : toolCalls.length ? null : '';
         return {
           content,
           toolCalls,
