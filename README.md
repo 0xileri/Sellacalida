@@ -6,6 +6,8 @@ BCH BLAZE 2026, mainnet track. Solo build by [0xileri](https://github.com/0xiler
 
 **Live (mainnet, real PUSD):** https://sellacalida.up.railway.app · **Play money, no wallet needed:** https://web-production-20dba597.up.railway.app
 
+**Widget Factory deck:** https://docs.google.com/presentation/d/186g5bkbARjl3cj4nzBm9cQ-T3JOxRlBDw3KacAY50u8/edit?usp=sharing · **EMBER2026 votes:** `bitcoincash:zqufwwepurkeq8m22jv9afxndl7s4ml6ss25yu0lj4`
+
 Live results so far (Claude Sonnet 5.5, 0.50 PUSD bond each, challenger signing in Paytaca over WizardConnect):
 
 | Challenge | Verdict | Accept | Settle |
@@ -47,7 +49,7 @@ Done:
 Pending:
 
 - Refund the wallet spike's escrow after height 978185 (Refund on `/connect`, same browser). Selene not tried.
-- The Widget Factory deck and EMBER2026 links on the banner, and the demo recording.
+- The demo recording.
 
 ## Layout
 

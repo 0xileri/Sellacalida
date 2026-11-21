@@ -2,13 +2,23 @@
 
 // Accept an offer: pick a template, fill its params, then lock your fee next to the agent's bond in
 // one transaction from your wallet. On mocknet (local dev) a throwaway challenger key stands in.
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { parseExpr } from '@/lib/templates/expr';
 import { TEMPLATES, TEMPLATE_IDS, renderPrompt, validateSpecShape, type ChallengeSpec, type TemplateId } from '@/lib/templates/public';
 import type { AcceptBundle, ChallengeView, OfferView } from '@/lib/wire';
 import { useConfig, useWallet } from '../providers';
 import { Amount } from '../ui/bits';
+import { ArrowRight, Wallet } from '../ui/icons';
+
+function StepTitle({ n, children }: { n: number; children: ReactNode }) {
+  return (
+    <div className="flex items-center gap-2.5">
+      <span className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-[var(--accent)]/40 bg-[var(--accent-soft)] text-xs font-bold text-[var(--accent)]">{n}</span>
+      <span className="text-sm font-semibold">{children}</span>
+    </div>
+  );
+}
 
 const HINTS: Record<TemplateId, string> = {
   'bch.output_token_count': 'Pick a real transaction with several token outputs. FT and NFT outputs both count.',
@@ -101,25 +111,43 @@ export default function AcceptPanel({ offer, onClose }: { offer: OfferView; onCl
   }
 
   return (
-    <div className="mt-4 grid gap-4 rounded-lg border border-[var(--accent)]/40 bg-[var(--panel-2)] p-4">
+    <div className="mt-6 grid gap-7 border-t border-[var(--line)] pt-6">
       <div className="flex items-center justify-between gap-2">
-        <h3 className="font-semibold">Challenge this bond</h3>
-        <button className="text-sm text-[var(--muted)] hover:text-[var(--foreground)]" onClick={onClose} disabled={busy}>Close</button>
+        <h3 className="text-lg font-bold tracking-tight">Challenge this bond</h3>
+        <button className="rounded-lg px-2 py-1 text-sm text-[var(--muted)] transition hover:bg-[var(--panel-2)] hover:text-[var(--foreground)]" onClick={onClose} disabled={busy}>
+          Close
+        </button>
       </div>
 
-      <fieldset className="grid gap-2 sm:grid-cols-2">
-        <legend className="label mb-2">1. Pick a test</legend>
-        {TEMPLATE_IDS.map((t) => (
-          <label key={t} className={`cursor-pointer rounded-md border p-3 text-sm ${templateId === t ? 'border-[var(--accent)]' : 'border-[var(--line)]'}`}>
-            <input type="radio" name="template" className="sr-only" checked={templateId === t} onChange={() => setTemplateId(t)} />
-            <div className="font-medium">{TEMPLATES[t].title}</div>
-            <div className="mt-1 text-xs text-[var(--muted)]">{HINTS[t]}</div>
-          </label>
-        ))}
+      <fieldset className="grid gap-3">
+        <legend className="mb-3"><StepTitle n={1}>Pick a test</StepTitle></legend>
+        <div className="grid gap-2.5 sm:grid-cols-2">
+          {TEMPLATE_IDS.map((t) => (
+            <label
+              key={t}
+              className={`flex cursor-pointer gap-3 rounded-xl border p-3.5 text-sm transition ${
+                templateId === t ? 'border-[var(--accent)]/70 bg-[var(--accent-soft)]' : 'border-[var(--line-strong)] hover:border-[var(--muted)]/50'
+              }`}
+            >
+              <input type="radio" name="template" className="sr-only" checked={templateId === t} onChange={() => setTemplateId(t)} />
+              <span
+                className={`mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${
+                  templateId === t ? 'border-[var(--accent)]' : 'border-[var(--line-strong)]'
+                }`}
+              >
+                {templateId === t && <span className="h-2 w-2 rounded-full bg-[var(--accent)]" />}
+              </span>
+              <span>
+                <span className="block font-semibold">{TEMPLATES[t].title}</span>
+                <span className="mt-1 block text-xs leading-relaxed text-[var(--muted)]">{HINTS[t]}</span>
+              </span>
+            </label>
+          ))}
+        </div>
       </fieldset>
 
       <div className="grid gap-3">
-        <div className="label">2. Make it hard</div>
+        <StepTitle n={2}>Make it hard</StepTitle>
         {templateId === 'math.exact_result' ? (
           <label className="grid gap-1 text-sm">
             Expression
@@ -152,19 +180,39 @@ export default function AcceptPanel({ offer, onClose }: { offer: OfferView; onCl
         )}
       </div>
 
-      <div className="grid gap-2 text-sm">
-        <div className="label">3. What the agent will see</div>
+      <div className="grid gap-3 text-sm">
+        <StepTitle n={3}>What the agent will see</StepTitle>
         {spec && problems.length === 0 ? (
-          <pre className="whitespace-pre-wrap rounded-md border border-[var(--line)] bg-[var(--background)] p-3 font-mono text-xs leading-relaxed">{renderPrompt(spec)}</pre>
+          <div className="overflow-hidden rounded-xl border border-[var(--line-strong)] bg-[var(--background)]">
+            <div className="flex items-center gap-1.5 border-b border-[var(--line)] px-3 py-2">
+              <span className="h-2 w-2 rounded-full bg-[var(--line-strong)]" />
+              <span className="h-2 w-2 rounded-full bg-[var(--line-strong)]" />
+              <span className="h-2 w-2 rounded-full bg-[var(--line-strong)]" />
+              <span className="ml-2 font-mono text-[11px] text-[var(--faint)]">prompt</span>
+            </div>
+            <pre className="whitespace-pre-wrap break-words p-4 font-mono text-xs leading-relaxed">{renderPrompt(spec)}</pre>
+          </div>
         ) : (
-          <ul className="list-inside list-disc text-[var(--bad)]">{problems.map((p) => <li key={p}>{p}</li>)}</ul>
+          <ul className="list-inside list-disc rounded-xl border border-[var(--bad)]/30 bg-[var(--bad-bg)] p-3 text-[var(--bad)]">{problems.map((p) => <li key={p}>{p}</li>)}</ul>
         )}
       </div>
 
-      <div className="grid gap-1 text-sm text-[var(--muted)]">
-        <div>
-          You lock <Amount base={offer.params.feeAmount} className="text-[var(--foreground)]" />. The agent has{' '}
-          <Amount base={offer.params.bondAmount} className="text-[var(--foreground)]" /> at stake. The winner takes both.
+      <div className="grid gap-3 text-sm text-[var(--muted)]">
+        <div className="grid grid-cols-3 gap-px overflow-hidden rounded-xl border border-[var(--line)] bg-[var(--line)] text-center">
+          <div className="bg-[var(--background)]/70 px-2 py-3">
+            <div className="label">You lock</div>
+            <div className="mt-1 font-bold text-[var(--foreground)]"><Amount base={offer.params.feeAmount} /></div>
+          </div>
+          <div className="bg-[var(--background)]/70 px-2 py-3">
+            <div className="label">Agent stakes</div>
+            <div className="mt-1 font-bold text-[var(--foreground)]"><Amount base={offer.params.bondAmount} /></div>
+          </div>
+          <div className="bg-[var(--background)]/70 px-2 py-3">
+            <div className="label">Winner takes</div>
+            <div className="mt-1 font-bold text-[var(--accent)]">
+              <Amount base={(BigInt(offer.params.feeAmount) + BigInt(offer.params.bondAmount)).toString()} />
+            </div>
+          </div>
         </div>
         <div>
           The agent must answer within {windowBlocks - grace} blocks. If the verifier never signs, both sides are refunded after{' '}
@@ -173,25 +221,32 @@ export default function AcceptPanel({ offer, onClose }: { offer: OfferView; onCl
       </div>
 
       {isDev && (
-        <p className="text-sm text-[var(--warn)]">
+        <p className="rounded-xl border border-[var(--warn)]/30 bg-[var(--warn-bg)] p-3 text-sm text-[var(--warn)]">
           Preview: play money on an in-memory test chain. A throwaway challenger key signs for you, but the agent&apos;s answer
           comes from the real model and the verifier signs for real.
         </p>
       )}
-      {error && <p className="text-sm text-[var(--bad)]">{error}</p>}
+      {error && <p className="rounded-xl border border-[var(--bad)]/30 bg-[var(--bad-bg)] p-3 text-sm text-[var(--bad)]">{error}</p>}
       <div className="flex flex-wrap items-center gap-3">
         {isDev ? (
-          <button className="btn" onClick={() => void submit()} disabled={busy || !spec || problems.length > 0}>
-            Run it on mocknet (dev challenger)
+          <button className="btn btn-lg" onClick={() => void submit()} disabled={busy || !spec || problems.length > 0}>
+            Run it on mocknet (dev challenger) <ArrowRight size={17} />
           </button>
         ) : wc.state !== 'connected' ? (
-          <button className="btn" onClick={() => wc.connect()}>Connect wallet to challenge</button>
+          <button className="btn btn-lg" onClick={() => wc.connect()}>
+            <Wallet size={17} /> Connect wallet to challenge
+          </button>
         ) : (
-          <button className="btn" onClick={() => void submit()} disabled={busy || !spec || problems.length > 0 || !address}>
-            Lock fee and challenge
+          <button className="btn btn-lg" onClick={() => void submit()} disabled={busy || !spec || problems.length > 0 || !address}>
+            Lock fee and challenge <ArrowRight size={17} />
           </button>
         )}
-        {step && <span className="text-sm text-[var(--muted)]">{step}…</span>}
+        {step && (
+          <span className="inline-flex items-center gap-2 text-sm text-[var(--muted)]">
+            <span className="live-dot text-[var(--accent)]" />
+            {step}…
+          </span>
+        )}
       </div>
     </div>
   );

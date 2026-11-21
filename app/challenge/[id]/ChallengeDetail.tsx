@@ -7,11 +7,12 @@ import { use, type ReactNode } from 'react';
 import { TEMPLATES } from '@/lib/templates/public';
 import type { ChallengeView, EvidenceView, StatsView } from '@/lib/wire';
 import { usePoll } from '../../ui/hooks';
-import { Amount, Card, CopyText, Disclosure, Pill, SourceBadge, TxLink, short, verdictLabel } from '../../ui/bits';
+import { Amount, Card, CopyText, Disclosure, Pill, SourceBadge, TONE, TxLink, short, verdictLabel } from '../../ui/bits';
+import { ArrowLeft } from '../../ui/icons';
 
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="grid grid-cols-[8.5rem_1fr] gap-2 border-t border-[var(--line)] py-2 text-sm first:border-t-0">
+    <div className="grid grid-cols-[8.5rem_minmax(0,1fr)] gap-3 border-t border-[var(--line)] py-2.5 text-sm first:border-t-0">
       <div className="text-[var(--muted)]">{label}</div>
       <div className="min-w-0 break-words">{children}</div>
     </div>
@@ -22,13 +23,13 @@ function Trace({ check }: { check: NonNullable<EvidenceView['check']> }) {
   const t = check.trace;
   if (t.kind === 'math') {
     return (
-      <ol className="grid gap-1 font-mono text-xs">
+      <ol className="grid gap-2 rounded-xl border border-[var(--line)] bg-[var(--background)] p-4 font-mono text-xs leading-relaxed">
         {t.steps.map((s, i) => (
           <li key={i} className="flex flex-wrap gap-2">
             <span className="text-[var(--muted)]">{i + 1}.</span>
-            <span>{s.expr}</span>
+            <span className="min-w-0 break-all">{s.expr}</span>
             <span className="text-[var(--muted)]">=</span>
-            <span>{s.value}</span>
+            <span className="min-w-0 break-all">{s.value}</span>
           </li>
         ))}
       </ol>
@@ -81,8 +82,8 @@ export default function ChallengeDetail({ params }: { params: Promise<{ id: stri
   const { data: c, error } = usePoll<ChallengeView>(`/api/challenges/${id}`, 2500);
   const { data: stats } = usePoll<StatsView>('/api/stats', 10_000);
 
-  if (error && !c) return <main className="mx-auto max-w-5xl px-4 py-10 text-[var(--bad)]">{error}</main>;
-  if (!c) return <main className="mx-auto max-w-5xl px-4 py-10 text-[var(--muted)]">Loading challenge…</main>;
+  if (error && !c) return <main className="mx-auto max-w-6xl px-4 py-12 text-[var(--bad)] sm:px-6">{error}</main>;
+  if (!c) return <main className="mx-auto max-w-6xl px-4 py-12 text-[var(--muted)] sm:px-6">Loading challenge…</main>;
 
   const v = verdictLabel(c.status, c.verdict);
   const ev = c.evidence;
@@ -90,25 +91,36 @@ export default function ChallengeDetail({ params }: { params: Promise<{ id: stri
   const settled = c.status === 'settled' || c.status === 'timed_out';
 
   return (
-    <main className="mx-auto flex max-w-5xl flex-col gap-6 px-4 py-8">
+    <main className="mx-auto flex max-w-6xl flex-col gap-6 px-4 pt-8 sm:px-6 sm:pt-10">
       <header className="flex flex-col gap-3">
-        <Link href="/arena" className="text-sm text-[var(--muted)] hover:text-[var(--foreground)]">← Arena</Link>
+        <Link href="/arena" className="inline-flex w-fit items-center gap-1.5 text-sm text-[var(--muted)] transition hover:text-[var(--foreground)]">
+          <ArrowLeft size={15} /> Arena
+        </Link>
         <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-2xl font-semibold">{TEMPLATES[c.templateId].title}</h1>
-          <span className="text-lg"><Pill kind={v.kind}>{v.text}</Pill></span>
+          <h1 className="text-3xl font-extrabold tracking-[-0.03em] sm:text-4xl">{TEMPLATES[c.templateId].title}</h1>
+          <Pill kind={v.kind}>{v.text}</Pill>
         </div>
         <p className="text-sm text-[var(--muted)]">
-          Agent <Link className="underline underline-offset-4" href={`/agent/${c.agentId}`}>{c.agentName}</Link> · challenge{' '}
+          Agent <Link className="link" href={`/agent/${c.agentId}`}>{c.agentName}</Link> · challenge{' '}
           <span className="font-mono">{short(c.id, 6)}</span> · {c.network}
         </p>
-        {c.lastError && !settled && <p className="text-sm text-[var(--warn)]">{c.lastError}</p>}
+        {c.lastError && !settled && <p className="rounded-xl border border-[var(--warn)]/30 bg-[var(--warn-bg)] p-3 text-sm text-[var(--warn)]">{c.lastError}</p>}
       </header>
 
-      <div className="grid gap-6 lg:grid-cols-[3fr_2fr]">
-        <div className="flex flex-col gap-6">
+      <section className={`flex flex-col gap-2 rounded-2xl border p-5 sm:flex-row sm:items-center sm:justify-between sm:gap-6 sm:p-6 ${(TONE[v.kind] ?? TONE.muted).border} ${(TONE[v.kind] ?? TONE.muted).bg}`}>
+        <div className={`inline-flex shrink-0 items-center gap-2.5 text-xl font-extrabold tracking-tight sm:text-2xl ${(TONE[v.kind] ?? TONE.muted).text}`}>
+          {v.kind === 'live' && <span className="live-dot" />}
+          {v.text}
+        </div>
+        <div className="text-sm leading-relaxed text-[var(--foreground)]/90 sm:max-w-xl sm:text-right"><Payout c={c} /></div>
+      </section>
+
+      {/* minmax(0, …): a long unbroken number on the left must not squeeze the right column to one character */}
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+        <div className="flex min-w-0 flex-col gap-6">
           <Card>
-            <h2 className="label mb-2">The question</h2>
-            <pre className="whitespace-pre-wrap font-mono text-sm leading-relaxed">{c.prompt}</pre>
+            <h2 className="label mb-3">The question</h2>
+            <pre className="whitespace-pre-wrap break-words rounded-xl border border-[var(--line)] bg-[var(--background)] p-4 font-mono text-[13px] leading-relaxed">{c.prompt}</pre>
             <details className="mt-3 text-xs">
               <summary className="cursor-pointer text-[var(--muted)]">Canonical spec (its sha256 is bound into the escrow)</summary>
               <pre className="mt-2 overflow-x-auto rounded bg-[var(--background)] p-2 font-mono">{c.specJson}</pre>
@@ -116,7 +128,7 @@ export default function ChallengeDetail({ params }: { params: Promise<{ id: stri
           </Card>
 
           <Card>
-            <h2 className="label mb-2">The agent&apos;s answer</h2>
+            <h2 className="label mb-3">The agent&apos;s answer</h2>
             {!c.answer ? (
               <p className="text-[var(--muted)]">
                 {c.status === 'accepted' ? 'Thinking… the answer is committed before the verifier looks at anything.' : 'No answer was committed.'}
@@ -124,7 +136,7 @@ export default function ChallengeDetail({ params }: { params: Promise<{ id: stri
             ) : (
               <div className="flex flex-col gap-3">
                 <div className="flex flex-wrap items-center gap-3">
-                  <span className="font-mono text-3xl font-semibold">{c.answer.canonicalAnswer || '(unparseable)'}</span>
+                  <span className="min-w-0 break-all font-mono text-3xl font-bold tracking-tight">{c.answer.canonicalAnswer || '(unparseable)'}</span>
                   <SourceBadge source={c.answer.source} modelId={c.answer.modelId} />
                 </div>
                 <details className="text-sm">
@@ -153,7 +165,7 @@ export default function ChallengeDetail({ params }: { params: Promise<{ id: stri
           </Card>
 
           <Card>
-            <h2 className="label mb-2">The verdict</h2>
+            <h2 className="label mb-3">The verdict</h2>
             {!ev ? (
               <p className="text-[var(--muted)]">
                 {c.status === 'timed_out' ? 'No verdict was signed. The escrow refunded both sides.' : 'Not signed yet.'}
@@ -163,9 +175,9 @@ export default function ChallengeDetail({ params }: { params: Promise<{ id: stri
                 <div className="flex flex-wrap items-center gap-3">
                   <Pill kind={ev.verdict}>{ev.verdict}</Pill>
                   {ev.check ? (
-                    <span className="text-sm">
-                      Expected <span className="font-mono font-semibold">{ev.check.expected}</span>, agent said{' '}
-                      <span className="font-mono font-semibold">{c.answer?.canonicalAnswer || '(nothing parseable)'}</span>
+                    <span className="min-w-0 text-sm">
+                      Expected <span className="break-all font-mono font-semibold">{ev.check.expected}</span>, agent said{' '}
+                      <span className="break-all font-mono font-semibold">{c.answer?.canonicalAnswer || '(nothing parseable)'}</span>
                     </span>
                   ) : (
                     <span className="text-sm">No answer was committed before the answer deadline.</span>
@@ -192,16 +204,15 @@ export default function ChallengeDetail({ params }: { params: Promise<{ id: stri
           </Card>
         </div>
 
-        <div className="flex flex-col gap-6">
+        <div className="flex min-w-0 flex-col gap-6">
           <Card>
-            <h2 className="label mb-2">Money</h2>
+            <h2 className="label mb-3">Money</h2>
             <Row label="Agent bond"><Amount base={c.bondAmount} /></Row>
             <Row label="Challenger fee"><Amount base={c.feeAmount} /></Row>
-            <Row label="Challenger"><span className="font-mono text-xs">{c.challengerAddress}</span></Row>
-            <div className="mt-3 text-sm"><Payout c={c} /></div>
+            <Row label="Challenger"><span className="break-all font-mono text-xs">{c.challengerAddress}</span></Row>
           </Card>
           <Card>
-            <h2 className="label mb-2">Clock</h2>
+            <h2 className="label mb-3">Clock</h2>
             <Row label="Now">{height !== null ? `height ${height}` : '…'}</Row>
             <Row label="Answer deadline">
               height {c.answerDeadline}
@@ -210,14 +221,14 @@ export default function ChallengeDetail({ params }: { params: Promise<{ id: stri
             <Row label="Expiry">height {c.expiryHeight}</Row>
           </Card>
           <Card>
-            <h2 className="label mb-2">On chain</h2>
+            <h2 className="label mb-3">On chain</h2>
             <Row label="Accept">{c.acceptTxid ? <TxLink txid={c.acceptTxid} /> : '…'}</Row>
             <Row label="Escrow">{c.escrow ? <span><TxLink txid={c.escrow.txid} />:{c.escrow.vout}</span> : '…'}</Row>
             <Row label={c.timeoutTxid ? 'Timeout' : 'Settle'}>
               {c.settleTxid ? <TxLink txid={c.settleTxid} /> : c.timeoutTxid ? <TxLink txid={c.timeoutTxid} /> : '…'}
             </Row>
           </Card>
-          <Card><Disclosure /></Card>
+          <Card><Disclosure compact /></Card>
         </div>
       </div>
     </main>
