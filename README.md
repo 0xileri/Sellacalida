@@ -4,9 +4,13 @@
 
 BCH BLAZE 2026, mainnet track. Solo build by [0xileri](https://github.com/0xileri).
 
-**Live (mainnet, real PUSD):** https://sellacalida.up.railway.app · **Play money, no wallet needed:** https://web-production-20dba597.up.railway.app
+- **Live (mainnet, real PUSD):** https://sellacalida.up.railway.app
+- **Play money, no wallet needed:** https://web-production-20dba597.up.railway.app
+- **Widget Factory deck:** [Google Slides](https://docs.google.com/presentation/d/186g5bkbARjl3cj4nzBm9cQ-T3JOxRlBDw3KacAY50u8/edit?usp=sharing)
+- **EMBER2026 votes:** `bitcoincash:zqufwwepurkeq8m22jv9afxndl7s4ml6ss25yu0lj4`
+- **90-second demo:** being recorded; the link goes here before submission
 
-**Widget Factory deck:** https://docs.google.com/presentation/d/186g5bkbARjl3cj4nzBm9cQ-T3JOxRlBDw3KacAY50u8/edit?usp=sharing · **EMBER2026 votes:** `bitcoincash:zqufwwepurkeq8m22jv9afxndl7s4ml6ss25yu0lj4`
+![The Sellacalida home page on mainnet: the pitch, the agent in the hot seat with 0.50 PUSD at stake, and the BLAZE banner](docs/screenshots/home.png)
 
 Live results so far (Claude Sonnet 5.5, 0.50 PUSD bond each, challenger signing in Paytaca over WizardConnect):
 
@@ -17,6 +21,10 @@ Live results so far (Claude Sonnet 5.5, 0.50 PUSD bond each, challenger signing 
 | exact 89-digit product | FAIL (no parseable answer) | [a9a7f958…](https://explorer.bch.ninja/tx/a9a7f9583e0ab48d19286c3d32217be1552b4cbc639ef4bfbfc0ad2324519e95) | [7d247f96…](https://explorer.bch.ninja/tx/7d247f9646d6e18e21c2eb1b32fb8c5fc4131e186937579a57d256836b6d08a7) |
 
 BCH tip to the agent from the agent page, signed in Paytaca: [8b165cd3…](https://explorer.bch.ninja/tx/8b165cd3022fa8fa839641f7bce636e46fcb4bc33a0e9573cdbae61f86a728b6)
+
+The FAIL, as its [challenge page](https://sellacalida.up.railway.app/challenge/05db315e538f8fbb6f9ecc67bfdc03c440035129a36e37562471b8af31bbcc63) shows it: the model spent its answer budget on an 89-digit product and committed nothing parseable, the verifier signed FAIL, and the contract paid the challenger bond + fee.
+
+![A mainnet challenge page: FAIL, challenger paid 0.60 PUSD, with the question, the committed answer, the money and the clock](docs/screenshots/challenge-fail.png)
 
 An AI agent locks a bond (PUSD, or a chipnet test token) in a CashScript offer covenant. A challenger accepts in a single transaction from their own wallet, adding a fee and a parameterized, objectively checkable challenge. A verifier runs a deterministic test and signs pass, fail or no-response. The escrow contract pays the agent on pass, pays the challenger on fail or no-response, and refunds both sides if no attestation arrives before the block-height deadline.
 
@@ -29,6 +37,8 @@ The BCH contract holds the money and enforces the payout. An independent verifie
 What the verifier cannot do: send the funds anywhere except the agent or the challenger. What it can do: sign a wrong verdict. Every verdict is public evidence, so a bad one can be seen.
 
 ## Status
+
+**21 Nov 2026: ready to submit.** Live on mainnet with real AI challenges (2 PASS, 1 FAIL) and a BCH tip; the deck, repo and EMBER2026 address are on the home-page banner. Only the demo recording is left.
 
 Milestone 1 (contracts + wallet spike): **green on 19 Nov 2026**, three days after the 16 Nov gate (chipnet faucets never paid out, so the real-chain run moved to a capped mainnet run).
 
@@ -45,6 +55,8 @@ Done:
 - Mainnet app live since 19 Nov at https://sellacalida.up.railway.app (0.50 PUSD bonds, 0.10 fee, storage volume, play-money copy linked): 2 PASS and 1 FAIL from real challenges, listed at the top of this file.
 - Real-wallet run, 19 Nov: Paytaca over WizardConnect on mainnet passed every spike checklist row (connect, balances, PUSD into the offer P2SH32, covenant cancel with placeholders, accept with PUSD change, BCH tip). Funding path decided: PUSD through WizardConnect. Txids in `SPIKE.md`.
 - `/connect` wallet spike page: every flow also signed in tests by a simulated wallet, through the same JSON relay encoding a real wallet sees.
+- Brand and redesign, 21 Nov: the hot-seat mark (a chair with a flame on the seat), palette and type in [`docs/BRAND.md`](./docs/BRAND.md). Every page is built on it, with self-hosted Inter and JetBrains Mono, an outcome panel on each challenge (pass, fail, no-response and refunds in their own colors), and no horizontal scroll at phone width. Paytaca connects on the redesigned live site.
+- Widget Factory deck filled in the official template (slide text in [`docs/DECK.md`](./docs/DECK.md)); the deck link and the EMBER2026 address are on the home-page banner of both sites.
 
 Pending:
 
@@ -71,6 +83,10 @@ lib/agent/                 LLM runner: Orbio / OpenAI-compatible client, strict 
 lib/server/                config (network / token guards), JSON DB, service layer, HTTP helpers, verifier loop
 lib/wire.ts                JSON shapes shared by the API and the browser
 app/                       pages: / , /arena, /challenge/[id], /agent/[id]; /connect is the wallet spike
+app/ui/                    shared UI: header, footer, logo, icons, display pieces
+app/fonts/                 self-hosted Inter and JetBrains Mono (OFL)
+public/brand/              logo files: mark, square and horizontal lockups
+docs/                      BRAND.md, DECK.md, README screenshots
 app/api/                   route handlers (public + /api/admin/*)
 instrumentation.ts         starts the verifier loop once per Node server
 scripts/chipnet/           contract runner for chipnet and capped mainnet (keygen, every contract path, sweep)
