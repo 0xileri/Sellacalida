@@ -53,6 +53,21 @@ On mainnet the app refuses bonds above 1.00 PUSD, refuses to publish while the a
 
 No `AGENT_WIF`, `VERIFIER_PRIVATE_KEY` or `FEE_WALLET_WIF` on the play-money service: mocknet uses built-in play keys.
 
+## Taking the funds back
+
+The mainnet agent and fee wallet hold real PUSD and BCH. To send them back to your own wallet (after judging, say), from your machine:
+
+1. Stop the app posting new bonds: set `AUTO_OFFERS=0` on the mainnet service and let it redeploy.
+2. Run (Windows: `npm.cmd`):
+
+   ```bash
+   npm run withdraw -- bitcoincash:z...your-token-address
+   ```
+
+3. Paste `AGENT_WIF` and `FEE_WALLET_WIF` when asked (copy them from Railway > the mainnet service > Variables). The input is hidden and the keys are never saved.
+
+It cancels the agent's open bonds (found through the live site's `/api/offers`) back to the agent, then sweeps the agent and fee wallet, BCH and PUSD, to your address. Every broadcast shows its outputs and waits for `y`. Bonds already accepted by a challenger are in an escrow and settle on their own; run it again afterwards to collect what they pay the agent.
+
 ## Switching to chipnet
 
 Do this after the `SPIKE.md` chipnet run, from a machine with normal internet.

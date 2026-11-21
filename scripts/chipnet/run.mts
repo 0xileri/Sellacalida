@@ -20,7 +20,6 @@
 // Writes data/<network>-state.json (pending escrows) and data/<network>-results.{json,md} (txids for SPIKE.md).
 import { existsSync, mkdirSync, readFileSync, writeFileSync, appendFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { createInterface } from 'node:readline';
 import {
   binToHex, decodePrivateKeyWif, encodePrivateKeyWif, generatePrivateKey, hash160, secp256k1,
 } from '@bitauth/libauth';
@@ -35,6 +34,7 @@ import {
   reclaimOffers, scenarioCancel, scenarioFail, scenarioPass, scenarioStartShort, seedMocknet, sweep, waitForHeight,
   type FlowContext, type Key, type PendingEscrow, type StepResult,
 } from './flows';
+import { ask } from '../prompt';
 
 // ---- arguments -----------------------------------------------------------------------------------
 
@@ -138,51 +138,6 @@ function saveResults(results: StepResult[]) {
 }
 
 // ---- mainnet: ask before every broadcast ---------------------------------------------------------
-
-// One reader for the whole run, with a queue: piped answers that arrive before a prompt are kept,
-// and once stdin ends every further prompt is a "no" (never a hang, never a silent exit).
-const answers: string[] = [];
-let waiting: ((line: string | null) => void) | null = null;
-let inputEnded = false;
-let reader: ReturnType<typeof createInterface> | null = null;
-
-function startReader() {
-  if (reader) return;
-  reader = createInterface({ input: process.stdin, output: process.stdout, terminal: Boolean(process.stdin.isTTY) });
-  reader.on('line', (line) => {
-    if (waiting) {
-      const w = waiting;
-      waiting = null;
-      w(line);
-    } else answers.push(line);
-  });
-  reader.on('close', () => {
-    inputEnded = true;
-    if (waiting) {
-      const w = waiting;
-      waiting = null;
-      w(null);
-    }
-  });
-}
-
-/** y / yes broadcasts; anything else, or no input left, is a no. */
-function ask(question: string): Promise<boolean> {
-  startReader();
-  // the reader's own prompt, so a redraw while typing (backspace) keeps the question on screen
-  reader!.setPrompt(question);
-  reader!.prompt(true);
-  return new Promise((resolve) => {
-    const done = (line: string | null) => {
-      if (line === null) process.stdout.write('(no input: treated as no)\n');
-      else if (!process.stdin.isTTY) process.stdout.write(`${line}\n`);
-      resolve(line !== null && /^y(es)?$/i.test(line.trim()));
-    };
-    if (answers.length) done(answers.shift()!);
-    else if (inputEnded) done(null);
-    else waiting = done;
-  });
-}
 
 // ---- main ----------------------------------------------------------------------------------------
 
