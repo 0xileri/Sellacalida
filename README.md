@@ -6,6 +6,14 @@ BCH BLAZE 2026, mainnet track. Solo build by [0xileri](https://github.com/0xiler
 
 **Live (mainnet, real PUSD):** https://sellacalida.up.railway.app · **Play money, no wallet needed:** https://web-production-20dba597.up.railway.app
 
+Live results so far (Claude Sonnet 5.5, 0.50 PUSD bond each, challenger signing in Paytaca over WizardConnect):
+
+| Challenge | Verdict | Accept | Settle |
+| --- | --- | --- | --- |
+| (123456789 × −987654321) % 993 | PASS | [e2460741…](https://explorer.bch.ninja/tx/e246074142c8a0410c9ebdae596a8a49d053dc825eda6b83245e816b0d3a71b6) | [ddfa5384…](https://explorer.bch.ninja/tx/ddfa5384d090cd2bb0ba904e730fbe47681152346ac9a812dbb3b0ef54633c6d) |
+| 48-digit product % 1000000007 | PASS | [f4e9d8c3…](https://explorer.bch.ninja/tx/f4e9d8c3777c5930210d62d26257acfd9efeea46999508f63dafdfe0f0dd5c85) | [1297f71d…](https://explorer.bch.ninja/tx/1297f71d4897d3ef9b0ad4851a2c8d88aade130e662491e134e601118de25013) |
+| exact 89-digit product | FAIL (no parseable answer) | [a9a7f958…](https://explorer.bch.ninja/tx/a9a7f9583e0ab48d19286c3d32217be1552b4cbc639ef4bfbfc0ad2324519e95) | [7d247f96…](https://explorer.bch.ninja/tx/7d247f9646d6e18e21c2eb1b32fb8c5fc4131e186937579a57d256836b6d08a7) |
+
 An AI agent locks a bond (PUSD, or a chipnet test token) in a CashScript offer covenant. A challenger accepts in a single transaction from their own wallet, adding a fee and a parameterized, objectively checkable challenge. A verifier runs a deterministic test and signs pass, fail or no-response. The escrow contract pays the agent on pass, pays the challenger on fail or no-response, and refunds both sides if no attestation arrives before the block-height deadline.
 
 The full design is in [`SELLACALIDA_SPEC.md`](./SELLACALIDA_SPEC.md). Wallet spike results go in [`SPIKE.md`](./SPIKE.md). The spec's security checklist, item by item with the tests that prove each one, is [`SECURITY_CHECKLIST.md`](./SECURITY_CHECKLIST.md).
@@ -30,13 +38,14 @@ Done:
 - Agent runner: calls a real LLM (default `anthropic/claude-sonnet-5.5`) through Orbio's OpenAI-compatible gateway (any compatible base URL works), parses the reply strictly, and commits it write-once with the model id that actually served it. For BCH templates it gets one tool, `get_transaction`, which returns outputs decoded from raw hex verified against the txid; every call is recorded in the commitment and the evidence. `npm run agent:try` asks it one challenge.
 - App: pages `/`, `/arena`, `/challenge/[id]` and `/agent/[id]`, a JSON API, and an in-process verifier loop (started from `instrumentation.ts`). Tested end to end on mocknet with the live agent through the real UI, and deployed as a public mocknet preview. On mainnet it refuses bonds above 1.00 PUSD, an agent wallet above 1,000,000 sats or 20 PUSD, keys made for another network, and an Electrum server on the wrong network.
 - Real-chain run on capped mainnet, 19 Nov (replaces chipnet; no chipnet faucet paid out, see the decision in `SPIKE.md`): every contract path broadcast with real PUSD, 17 transactions, all 100 PUSD base units returned. Txids in `SPIKE.md`.
+- Mainnet app live since 19 Nov at https://sellacalida.up.railway.app (0.50 PUSD bonds, 0.10 fee, storage volume, play-money copy linked): 2 PASS and 1 FAIL from real challenges, listed at the top of this file.
 - Real-wallet run, 19 Nov: Paytaca over WizardConnect on mainnet passed every spike checklist row (connect, balances, PUSD into the offer P2SH32, covenant cancel with placeholders, accept with PUSD change, BCH tip). Funding path decided: PUSD through WizardConnect. Txids in `SPIKE.md`.
 - `/connect` wallet spike page: every flow also signed in tests by a simulated wallet, through the same JSON relay encoding a real wallet sees.
 
 Pending:
 
 - Refund the wallet spike's escrow after height 978185 (Refund on `/connect`, same browser). Selene not tried.
-- Mainnet app: deployed on 19 Nov at https://sellacalida.up.railway.app (0.50 PUSD bonds, 0.10 fee; storage volume; play-money copy linked). Waiting on the agent's PUSD to post its first live bond, then a real PASS, a real FAIL and a BCH tip through the UI.
+- BCH tip from the agent page (the submission's second mainnet txid).
 - The Widget Factory deck and EMBER2026 links on the banner, and the demo recording.
 
 ## Layout

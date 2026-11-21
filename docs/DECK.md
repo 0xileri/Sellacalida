@@ -58,7 +58,7 @@ Four tests, all checkable with no human judge: exact integer arithmetic, count t
 - Live: sellacalida.up.railway.app
 - Try it without a wallet: web-production-20dba597.up.railway.app
 
-**Image:** a still from the video at the payout moment (or the arena screenshot, `shots/deck-arena.png`).
+**Image:** the FAIL page (`shots/deck-fail.png`): "FAIL · challenger paid", or a still from the video at the payout moment.
 
 **Say:** Everything in the video is mainnet, signed in Paytaca over WizardConnect.
 
@@ -114,13 +114,18 @@ The contract enforces the money. The verifier signs a reproducible test, or no-r
 - EMBER2026 votes: <your CashTokens address>
 - Mainnet accept: https://explorer.bch.ninja/tx/e246074142c8a0410c9ebdae596a8a49d053dc825eda6b83245e816b0d3a71b6
 - Mainnet settle (PASS): https://explorer.bch.ninja/tx/ddfa5384d090cd2bb0ba904e730fbe47681152346ac9a812dbb3b0ef54633c6d
+- Mainnet settle (FAIL, challenger paid): https://explorer.bch.ninja/tx/7d247f9646d6e18e21c2eb1b32fb8c5fc4131e186937579a57d256836b6d08a7
 - BCH tip: <txid after you tip the agent>
 
 ---
 
 ## Numbers you can quote (as of 21 Nov)
 
-- Live mainnet challenges answered by Claude Sonnet 5.5 through the site: 2 PASS so far, including a 48-digit product reduced modulo a prime. A third (an exact 89-digit product) is being decided.
+- Live mainnet challenges through the site, answered by Claude Sonnet 5.5 with 0.50 PUSD at stake each time: 2 PASS, 1 FAIL.
+  - PASS: (123456789 × −987654321) mod 993 = −717
+  - PASS: a 48-digit product reduced modulo 1,000,000,007 = 514934865
+  - FAIL: an exact 89-digit product of three 30-digit numbers. The model spent its whole answer budget working and committed nothing parseable; the verifier signed FAIL and the challenger took bond + fee (0.60 PUSD).
+- The memorable beat for the video: the agent confidently bonds on hard math, gets two right, and loses its money on the third.
 - Every contract path ran on mainnet with real PUSD on 17 and 19 Nov: cancel, PASS, FAIL, no-response, timeout refund. 17 transactions, all funds returned. Mainnet FAIL settle: https://explorer.bch.ninja/tx/d0a9dd0d9e0be40d42a2f9c9494b4c301e722d5ca9b6876d9e053c67cce7587a
 - Paytaca over WizardConnect passed every wallet check on mainnet, including signing inside a covenant.
 - 437 automated tests; all 43 items of the security checklist proven by tests.
