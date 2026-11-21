@@ -314,10 +314,16 @@ export async function confirmAccept(ctx: ServerContext, challengeId: string, txi
 // ---------------------------------------------------------------------------------------------
 
 /** Ask the live agent and commit its answer. Never computes or sees an expected answer. */
+/** Agent errors (not wrong answers) are retried this many times per challenge, then left to no-response. */
+export const MAX_AGENT_FAILURES = 3;
+
 export async function runAgent(ctx: ServerContext, challengeId: string): Promise<void> {
-  const { inFlight } = ctx.runtime;
+  const { inFlight, agentFailures } = ctx.runtime;
   const c = ctx.db.challenge(challengeId);
   if (!c || c.status !== 'accepted' || ctx.answers.get(c.id) || inFlight.has(c.id)) return;
+  // every tick retries an unanswered challenge; without a cap a persistent error would call the
+  // paid LLM API every 20 s until the answer deadline
+  if ((agentFailures.get(c.id) ?? 0) >= MAX_AGENT_FAILURES) return;
   if (!ctx.llm) {
     ctx.db.updateChallenge(c.id, { lastError: 'agent offline (no LLM key); this will end as no-response at the deadline' });
     return;
@@ -334,7 +340,12 @@ export async function runAgent(ctx: ServerContext, challengeId: string): Promise
     });
     ctx.db.updateChallenge(c.id, { status: 'answered', lastError: null });
   } catch (e) {
-    ctx.db.updateChallenge(c.id, { lastError: `agent: ${e instanceof Error ? e.message : String(e)}` });
+    const failures = (agentFailures.get(c.id) ?? 0) + 1;
+    agentFailures.set(c.id, failures);
+    const gaveUp = failures >= MAX_AGENT_FAILURES
+      ? ` (gave up after ${failures} attempts; this ends as no-response at the answer deadline)`
+      : ` (attempt ${failures} of ${MAX_AGENT_FAILURES})`;
+    ctx.db.updateChallenge(c.id, { lastError: `agent: ${e instanceof Error ? e.message : String(e)}${gaveUp}` });
   } finally {
     inFlight.delete(c.id);
   }

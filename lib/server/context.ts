@@ -32,7 +32,7 @@ export interface ServerContext {
   /** mocknet only: a throwaway challenger for the dev "simulate accept" route */
   devChallenger: KeyPair | null;
   /** process-wide runtime guards, kept on the shared context (see getServerContext) */
-  runtime: { ticking: boolean; inFlight: Set<string>; lastAutoOfferError: number; chainChecked: boolean };
+  runtime: { ticking: boolean; inFlight: Set<string>; lastAutoOfferError: number; chainChecked: boolean; agentFailures: Map<string, number> };
 }
 
 export function keyPair(priv: Uint8Array, network: ServerConfig['network']): KeyPair {
@@ -83,7 +83,7 @@ export function buildContextFromEnv(env: Record<string, string | undefined> = pr
 
   const ctx: ServerContext = {
     config, provider, db, answers, llm, verifier, agentKey, devChallenger,
-    runtime: { ticking: false, inFlight: new Set(), lastAutoOfferError: 0, chainChecked: false },
+    runtime: { ticking: false, inFlight: new Set(), lastAutoOfferError: 0, chainChecked: false, agentFailures: new Map() },
   };
   if (mocknet) seedMocknet(ctx, provider as MockNetworkProvider);
   return ctx;

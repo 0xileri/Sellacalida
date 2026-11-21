@@ -9,8 +9,8 @@ import { makeOfferContract } from '@/lib/contracts';
 import { loadConfig } from '@/lib/server/config';
 import { buildContextFromEnv, type ServerContext } from '@/lib/server/context';
 import {
-  UserError, agentView, cancelOffer, challengeView, confirmAccept, createOffer, devSimulateAccept, prepareChallenge,
-  afterAccept, ensureChainChecked, ensureOpenOffers, refreshOffers, statsView, verifierTick,
+  MAX_AGENT_FAILURES, UserError, agentView, cancelOffer, challengeView, confirmAccept, createOffer, devSimulateAccept,
+  prepareChallenge, afterAccept, ensureChainChecked, ensureOpenOffers, refreshOffers, runAgent, statsView, verifierTick,
 } from '@/lib/server/service';
 import { assertChainMatchesNetwork } from '@/lib/bch/network';
 import type { NetworkProvider } from 'cashscript';
@@ -137,6 +137,31 @@ describe('Electrum server on the wrong network', () => {
     ctx.provider = at(925_000);
     await ensureChainChecked(ctx);
     expect(ctx.runtime.chainChecked).toBe(true);
+  });
+});
+
+describe('agent errors do not retry forever (21 Nov: every 20 s against a paid API)', () => {
+  it('a failing LLM is called at most MAX_AGENT_FAILURES times per challenge, then left to no-response', async () => {
+    const ctx = devCtx('-10');
+    const complete = vi.fn(async () => { throw new Error('gateway exploded'); });
+    ctx.llm = { client: { complete }, model: 'm' };
+    const offer = await createOffer(ctx);
+    const c = await devSimulateAccept(ctx, offer.id, MATH);
+    for (let i = 0; i < MAX_AGENT_FAILURES + 3; i++) await runAgent(ctx, c.id);
+    expect(complete).toHaveBeenCalledTimes(MAX_AGENT_FAILURES);
+    expect(ctx.db.challenge(c.id)?.status).toBe('accepted');
+    expect(ctx.db.challenge(c.id)?.lastError).toMatch(/gave up after 3 attempts; this ends as no-response/);
+  });
+
+  it('an empty model reply is a committed answer and the verifier signs FAIL', async () => {
+    const ctx = devCtx('');
+    const offer = await createOffer(ctx);
+    const c = await devSimulateAccept(ctx, offer.id, MATH);
+    await afterAccept(ctx, c.id);
+    const done = ctx.db.challenge(c.id)!;
+    expect(done.status).toBe('settled');
+    expect(done.verdict).toBe('FAIL');
+    expect(ctx.answers.get(c.id)).toMatchObject({ canonicalAnswer: '', rawResponse: '' });
   });
 });
 

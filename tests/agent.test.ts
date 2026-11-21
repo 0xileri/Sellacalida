@@ -68,9 +68,15 @@ describe('openAiCompatibleClient', () => {
     expect(f.calls).toHaveLength(1);
   });
 
-  it('rejects a response without message content', async () => {
+  it('rejects a response without any choice', async () => {
     const f = fakeFetch({ status: 200, body: { choices: [] } });
     await expect(openAiCompatibleClient({ apiKey: 'k', fetchImpl: f.fn }).complete({ model: 'm', messages: [] })).rejects.toThrow(/no choices/);
+  });
+
+  it('a reply with no text (the token budget ran out, 21 Nov) is an empty answer, not an error', async () => {
+    const f = fakeFetch({ status: 200, body: { id: 'gen-x', model: 'm', choices: [{ finish_reason: 'length', message: { role: 'assistant', content: null } }] } });
+    const r = await openAiCompatibleClient({ apiKey: 'k', fetchImpl: f.fn }).complete({ model: 'm', messages: [] });
+    expect(r).toMatchObject({ content: '', toolCalls: [], finishReason: 'length' });
   });
 });
 
@@ -141,6 +147,14 @@ describe('answerChallenge', () => {
     });
     expect(commitment.canonicalAnswer).toBe('');
     expect(commitment.rawResponse).toBe('somewhere around -10 or -11');
+  });
+
+  it('an empty reply is committed as "" too, so the verifier signs FAIL instead of the agent retrying', async () => {
+    const store = new AnswerStore();
+    const { commitment } = await answerChallenge({
+      spec: SPEC, challengeId: ID, store, client: stubClient(''), model: 'm', currentHeight: 1, answerDeadline: 5,
+    });
+    expect(commitment).toMatchObject({ canonicalAnswer: '', rawResponse: '', answerHash: sha256Hex('') });
   });
 
   it('does not call the model when an answer is already committed', async () => {
