@@ -14,7 +14,7 @@ import { POST as adminOffer } from '@/app/api/admin/offers/route';
 import { POST as devChallenge } from '@/app/api/admin/dev/challenge/route';
 import { resetPublicDevLimit } from '@/lib/server/devLimit';
 import { loadConfig } from '@/lib/server/config';
-import { PREPARE_LIMIT, resetRateLimits, takeRateSlot } from '@/lib/server/rateLimit';
+import { clientKey, PREPARE_LIMIT, resetRateLimits, takeRateSlot } from '@/lib/server/rateLimit';
 import { buildAccept } from '@/lib/bch/transactions';
 import { escrowArgsFor, makeOfferContract } from '@/lib/contracts';
 import nextConfig from '@/next.config';
@@ -169,18 +169,27 @@ describe('admin routes', () => {
 });
 
 describe('abuse limits and response headers', () => {
-  it('prepare is limited per client; a client-supplied earlier X-Forwarded-For hop does not get around it', async () => {
+  it('prepare is limited per visitor behind the proxy; a client-supplied X-Forwarded-For hop does not get around it', async () => {
     ctxWith('42');
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const from = (xff: string) => ({ 'x-forwarded-for': xff });
+    // as Railway delivers it: "<visitor>, <internal proxy>", and the proxy address is shared by everyone
+    const from = (visitor: string, spoofed?: string) => ({ 'x-forwarded-for': [spoofed, visitor, '10.0.0.1'].filter(Boolean).join(', ') });
     for (let i = 0; i < PREPARE_LIMIT.limit; i++) expect((await prepare(post({}, from('203.0.113.7')))).status).toBe(400);
     const refused = await prepare(post({}, from('203.0.113.7')));
     expect(refused.status).toBe(429);
     expect((await refused.json()).error).toMatch(/too many requests from this address; try again in \d+ s/);
-    expect((await prepare(post({}, from('1.2.3.4, 203.0.113.7')))).status).toBe(429); // the proxy's hop is last
-    expect((await prepare(post({}, from('198.51.100.9')))).status).toBe(400); // other clients are unaffected
+    expect((await prepare(post({}, from('203.0.113.7', '1.2.3.4')))).status).toBe(429); // a spoofed hop changes nothing
+    expect((await prepare(post({}, from('198.51.100.9')))).status).toBe(400); // another visitor through the same proxy is unaffected
     expect(warn).toHaveBeenCalledWith(expect.stringMatching(/prepare rate-limited \(x-forwarded-for hops: 2\)/));
     warn.mockRestore();
+  });
+
+  it('the visitor key falls back sensibly without a proxy', () => {
+    const req = (xff?: string) => new Request('http://t', { headers: xff ? { 'x-forwarded-for': xff } : {} });
+    expect(clientKey(req())).toBe('local');
+    expect(clientKey(req('203.0.113.7'))).toBe('203.0.113.7');
+    expect(clientKey(req('203.0.113.7, 10.0.0.1'))).toBe('203.0.113.7');
+    expect(clientKey(req('1.2.3.4, 203.0.113.7, 10.0.0.1'))).toBe('203.0.113.7');
   });
 
   it('the window slides', () => {

@@ -8,12 +8,14 @@ const buckets = (): Map<string, number[]> => (holder.__sellacalidaRate ??= new M
 export const PREPARE_LIMIT = { limit: 20, windowMs: 10 * 60 * 1000 };
 
 /**
- * The client as the hosting proxy saw it: the last X-Forwarded-For hop, which the proxy appends
- * (or writes) itself. Earlier hops come from the client and are not trusted.
+ * The visitor as the hosting proxy saw it. On Railway, X-Forwarded-For arrives as
+ * "<anything the client sent>, <visitor>, <Railway's internal proxy>" (checked on the live site:
+ * two hops for a plain request). So the visitor is the hop just before the last `trustedProxyHops`
+ * entries; hops further left come from the client and are not trusted.
  */
-export function clientKey(req: Request): string {
+export function clientKey(req: Request, trustedProxyHops = 1): string {
   const hops = (req.headers.get('x-forwarded-for') ?? '').split(',').map((s) => s.trim()).filter(Boolean);
-  return hops.at(-1) ?? 'local';
+  return hops.at(-1 - trustedProxyHops) ?? hops[0] ?? 'local';
 }
 
 /** Takes a slot, or returns a readable refusal. Old timestamps and idle clients are pruned as it goes. */
