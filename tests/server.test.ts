@@ -305,6 +305,28 @@ describe('agent + verifier', () => {
     expect(ctx.db.challenge(c.id)).toMatchObject({ status: 'settled', verdict: 'NORESPONSE' });
   });
 
+  it('a verdict signed while the model is still running keeps its settled status', async () => {
+    const ctx = devCtx('-10');
+    const o = await createOffer(ctx);
+    const c = await devSimulateAccept(ctx, o.id, MATH);
+    const deadline = 300_000 + 144 - 18;
+    // the deadline passes mid-call and the verifier loop settles NORESPONSE before the model returns
+    const client: LlmClient = {
+      complete: vi.fn(async () => {
+        provider(ctx).setBlockHeight(deadline);
+        await verifierTick(ctx);
+        return { content: '-10', toolCalls: [], finishReason: 'stop', servedModel: 'anthropic/claude-sonnet-5.5', generationId: 'g', usage: null };
+      }),
+    };
+    ctx.llm = { client, model: 'anthropic/claude-sonnet-5.5' };
+    await runAgent(ctx, c.id);
+    const settled = ctx.db.challenge(c.id)!;
+    expect(settled).toMatchObject({ status: 'settled', verdict: 'NORESPONSE', lastError: null });
+    expect(settled.settleTxid).toMatch(/^[0-9a-f]{64}$/);
+    await verifierTick(ctx); // a settled challenge is not looked at again
+    expect(ctx.db.challenge(c.id)).toMatchObject({ status: 'settled', verdict: 'NORESPONSE', lastError: null });
+  });
+
   it('expiry with nothing settled refunds both sides', async () => {
     const ctx = devCtx(null);
     ctx.verifier = { ...ctx.verifier! }; // keep the key: timeout needs no signature anyway
