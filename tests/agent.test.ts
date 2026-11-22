@@ -170,4 +170,24 @@ describe('answerChallenge', () => {
     await expect(answerChallenge({ spec: SPEC, challengeId: ID, store: new AnswerStore(), client, model: 'm', currentHeight: 5, answerDeadline: 5 })).rejects.toThrow(/deadline/);
     expect(client.complete).not.toHaveBeenCalled();
   });
+
+  it('records the height read after the model returns', async () => {
+    const store = new AnswerStore();
+    const { commitment } = await answerChallenge({
+      spec: SPEC, challengeId: ID, store, client: stubClient('-10'), model: 'm',
+      currentHeight: 1, answerDeadline: 50, heightAtCommit: () => 9,
+    });
+    expect(commitment.committedAtHeight).toBe(9);
+  });
+
+  it('does not commit if the deadline passes while the model is running', async () => {
+    const store = new AnswerStore();
+    const client = stubClient('-10');
+    await expect(answerChallenge({
+      spec: SPEC, challengeId: ID, store, client, model: 'm',
+      currentHeight: 1, answerDeadline: 5, heightAtCommit: async () => 5,
+    })).rejects.toThrow(/deadline/);
+    expect(client.complete).toHaveBeenCalledOnce();
+    expect(store.get(ID)).toBeNull();
+  });
 });
