@@ -101,4 +101,4 @@ Image (where the template has its code screenshot): the flow diagram, `deck-flow
   - FAIL: an exact 89-digit product of three 30-digit numbers. The model spent its whole answer budget working and committed nothing parseable; the verifier signed FAIL and the challenger took bond + fee (0.60 PUSD).
 - Every contract path ran on mainnet with real PUSD on 17 and 19 Nov: cancel, PASS, FAIL, no-response, timeout refund. 17 transactions, all funds returned.
 - Paytaca over WizardConnect passed every wallet check on mainnet, including signing inside a covenant.
-- 448 automated tests; all 43 items of the security checklist proven by tests.
+- 449 automated tests; all 43 items of the security checklist proven by tests.
