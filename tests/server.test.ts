@@ -305,6 +305,27 @@ describe('agent + verifier', () => {
     expect(ctx.db.challenge(c.id)).toMatchObject({ status: 'settled', verdict: 'NORESPONSE' });
   });
 
+  it('an answer that comes back after the deadline is not committed: NORESPONSE pays the challenger', async () => {
+    const ctx = devCtx('-10');
+    const o = await createOffer(ctx);
+    const c = await devSimulateAccept(ctx, o.id, MATH);
+    const deadline = 300_000 + 144 - 18;
+    // the model is called before the deadline and returns the right answer two blocks after it
+    const client: LlmClient = {
+      complete: vi.fn(async () => {
+        provider(ctx).setBlockHeight(deadline + 2);
+        return { content: '-10', toolCalls: [], finishReason: 'stop', servedModel: 'anthropic/claude-sonnet-5.5', generationId: 'g', usage: null };
+      }),
+    };
+    ctx.llm = { client, model: 'anthropic/claude-sonnet-5.5' };
+    await runAgent(ctx, c.id);
+    expect(client.complete).toHaveBeenCalledOnce();
+    expect(ctx.answers.get(c.id)).toBeNull();
+    expect(ctx.db.challenge(c.id)?.lastError).toMatch(/deadline/);
+    await verifierTick(ctx);
+    expect(ctx.db.challenge(c.id)).toMatchObject({ status: 'settled', verdict: 'NORESPONSE' });
+  });
+
   it('expiry with nothing settled refunds both sides', async () => {
     const ctx = devCtx(null);
     ctx.verifier = { ...ctx.verifier! }; // keep the key: timeout needs no signature anyway

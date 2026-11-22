@@ -339,6 +339,8 @@ export async function runAgent(ctx: ServerContext, challengeId: string): Promise
     await answerChallenge({
       spec, challengeId: c.id, store: ctx.answers, client: ctx.llm.client, model: ctx.llm.model,
       currentHeight: height, answerDeadline: Number(c.terms.expiryHeight - ctx.db.offer(c.offerId)!.params.verifierGraceBlocks),
+      // re-read at the write: a model call can outlast the answer deadline
+      heightAtCommit: () => ctx.provider.getBlockHeight(),
       chain: ctx.provider,
     });
     ctx.db.updateChallenge(c.id, { status: 'answered', lastError: null });

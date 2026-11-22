@@ -87,13 +87,21 @@ export async function answerChallenge(o: {
   store: AnswerStore;
   client: LlmClient;
   model: string;
+  /** chain height before the model is called; a late start does not call the model at all */
   currentHeight: number;
+  /**
+   * Chain height at the moment of the write. The server passes a fresh read, so an answer that was
+   * only on time when the request started cannot be committed after the deadline. Defaults to
+   * `currentHeight` (callers that do not cross a block, like the tests and `npm run agent:try`).
+   */
+  heightAtCommit?: () => Promise<number> | number;
   answerDeadline: number;
   chain?: RawTxReader;
 }): Promise<{ commitment: AnswerCommitment; answer: AgentAnswer }> {
   if (o.store.get(o.challengeId)) throw new Error(`challenge ${o.challengeId} already has a committed answer`);
   if (o.currentHeight >= o.answerDeadline) throw new Error('answer deadline has passed; not calling the model');
   const answer = await askAgent(o.spec, o.client, o.model, { chain: o.chain });
+  const height = o.heightAtCommit ? await o.heightAtCommit() : o.currentHeight;
   const commitment = o.store.commit(
     {
       challengeId: o.challengeId,
@@ -104,7 +112,7 @@ export async function answerChallenge(o: {
       canonicalAnswer: answer.canonicalAnswer,
       toolCalls: answer.toolCalls,
     },
-    { currentHeight: o.currentHeight, answerDeadline: o.answerDeadline },
+    { currentHeight: height, answerDeadline: o.answerDeadline },
   );
   return { commitment, answer };
 }
