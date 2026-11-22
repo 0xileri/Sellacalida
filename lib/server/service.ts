@@ -341,14 +341,18 @@ export async function runAgent(ctx: ServerContext, challengeId: string): Promise
       currentHeight: height, answerDeadline: Number(c.terms.expiryHeight - ctx.db.offer(c.offerId)!.params.verifierGraceBlocks),
       chain: ctx.provider,
     });
-    ctx.db.updateChallenge(c.id, { status: 'answered', lastError: null });
+    // the verifier may have settled (no-response) or timed out the escrow while the model was
+    // running; a terminal status must not be turned back into "answered"
+    if (ctx.db.challenge(c.id)?.status === 'accepted') ctx.db.updateChallenge(c.id, { status: 'answered', lastError: null });
   } catch (e) {
     const failures = (agentFailures.get(c.id) ?? 0) + 1;
     agentFailures.set(c.id, failures);
     const gaveUp = failures >= MAX_AGENT_FAILURES
       ? ` (gave up after ${failures} attempts; this ends as no-response at the answer deadline)`
       : ` (attempt ${failures} of ${MAX_AGENT_FAILURES})`;
-    ctx.db.updateChallenge(c.id, { lastError: `agent: ${e instanceof Error ? e.message : String(e)}${gaveUp}` });
+    if (ctx.db.challenge(c.id)?.status === 'accepted') {
+      ctx.db.updateChallenge(c.id, { lastError: `agent: ${e instanceof Error ? e.message : String(e)}${gaveUp}` });
+    }
   } finally {
     inFlight.delete(c.id);
   }
