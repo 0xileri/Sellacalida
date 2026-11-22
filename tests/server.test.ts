@@ -305,6 +305,16 @@ describe('agent + verifier', () => {
     expect(ctx.db.challenge(c.id)).toMatchObject({ status: 'settled', verdict: 'NORESPONSE' });
   });
 
+  it('expiry with nothing settled refunds both sides', async () => {
+    const ctx = devCtx(null);
+    ctx.verifier = { ...ctx.verifier! }; // keep the key: timeout needs no signature anyway
+    const o = await createOffer(ctx);
+    const c = await devSimulateAccept(ctx, o.id, MATH);
+    provider(ctx).setBlockHeight(300_000 + 144);
+    await verifierTick(ctx);
+    expect(ctx.db.challenge(c.id)?.status).toBe('timed_out');
+  });
+
   it('a verdict signed while the model is still running keeps its settled status', async () => {
     const ctx = devCtx('-10');
     const o = await createOffer(ctx);
@@ -325,16 +335,6 @@ describe('agent + verifier', () => {
     expect(settled.settleTxid).toMatch(/^[0-9a-f]{64}$/);
     await verifierTick(ctx); // a settled challenge is not looked at again
     expect(ctx.db.challenge(c.id)).toMatchObject({ status: 'settled', verdict: 'NORESPONSE', lastError: null });
-  });
-
-  it('expiry with nothing settled refunds both sides', async () => {
-    const ctx = devCtx(null);
-    ctx.verifier = { ...ctx.verifier! }; // keep the key: timeout needs no signature anyway
-    const o = await createOffer(ctx);
-    const c = await devSimulateAccept(ctx, o.id, MATH);
-    provider(ctx).setBlockHeight(300_000 + 144);
-    await verifierTick(ctx);
-    expect(ctx.db.challenge(c.id)?.status).toBe('timed_out');
   });
 
   it('refreshOffers notices an offer spent outside the app', async () => {
