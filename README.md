@@ -8,7 +8,7 @@ BCH BLAZE 2026, mainnet track. Solo build by [0xileri](https://github.com/0xiler
 - **Play money, no wallet needed:** https://web-production-20dba597.up.railway.app
 - **Widget Factory deck:** [Google Slides](https://docs.google.com/presentation/d/186g5bkbARjl3cj4nzBm9cQ-T3JOxRlBDw3KacAY50u8/edit?usp=sharing)
 - **EMBER2026 votes:** `bitcoincash:zqufwwepurkeq8m22jv9afxndl7s4ml6ss25yu0lj4`
-- **90-second demo:** being recorded; the link goes here before submission
+- **Demo video (97 s, narrated):** https://youtu.be/qufSoZhdMUg
 
 ![The Sellacalida home page on mainnet: the pitch, the agent in the hot seat with 0.50 PUSD at stake, and the BLAZE banner](docs/screenshots/home.png)
 
@@ -38,7 +38,7 @@ What the verifier cannot do: send the funds anywhere except the agent or the cha
 
 ## Status
 
-**21 Nov 2026: ready to submit.** Live on mainnet with real AI challenges (2 PASS, 1 FAIL) and a BCH tip; the deck, repo and EMBER2026 address are on the home-page banner. Only the demo recording is left.
+**21 Nov 2026: ready to submit.** Live on mainnet with real AI challenges (2 PASS, 1 FAIL) and a BCH tip; the deck, repo and EMBER2026 address are on the home-page banner. The narrated demo video is up.
 
 Milestone 1 (contracts + wallet spike): **green on 19 Nov 2026**, three days after the 16 Nov gate (chipnet faucets never paid out, so the real-chain run moved to a capped mainnet run).
 
@@ -62,7 +62,6 @@ Done:
 Pending:
 
 - Refund the wallet spike's escrow after height 978185 (Refund on `/connect`, same browser). Selene not tried.
-- The demo recording.
 
 ## Layout
 
