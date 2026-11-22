@@ -38,10 +38,25 @@ export type VerifierOutcome =
   | { kind: 'settled'; verdict: Verdict; txid: string; evidence: Evidence }
   | { kind: 'timed_out'; txid: string };
 
+/**
+ * Smallest fee-wallet coin the verifier attaches. Its change has to clear MIN_OUTPUT_SATS after the
+ * miner fee, and a settle with the extra input is about 1,170 bytes, roughly 1,290 sats at
+ * DEFAULT_FEE_RATE (settles need about 2,300 sats; timeouts less). The old floor of
+ * 2 * MIN_OUTPUT_SATS picked a 2,000 to 2,200-sat coin, which failed the escrow's change check on
+ * every tick, so the winner was never paid even with a bigger coin in the same wallet.
+ */
+export const FEE_INPUT_MIN_SATS = MIN_OUTPUT_SATS + 1_500n;
+
+/** The smallest token-free coin that can pay a settle or timeout; none means the escrow pays its own fee. */
+export function pickFeeUtxo<T extends { token?: unknown; satoshis: bigint }>(utxos: readonly T[]): T | undefined {
+  return utxos
+    .filter((u) => !u.token && u.satoshis >= FEE_INPUT_MIN_SATS)
+    .sort((a, b) => (a.satoshis < b.satoshis ? -1 : a.satoshis > b.satoshis ? 1 : 0))[0];
+}
+
 async function feeInput(deps: VerifierDeps): Promise<UserInput | undefined> {
   if (!deps.feeWallet) return undefined;
-  const utxos = await deps.provider.getUtxosForLockingBytecode(deps.feeWallet.lock);
-  const u = utxos.filter((x) => !x.token && x.satoshis >= 2n * MIN_OUTPUT_SATS).sort((a, b) => (a.satoshis < b.satoshis ? -1 : 1))[0];
+  const u = pickFeeUtxo(await deps.provider.getUtxosForLockingBytecode(deps.feeWallet.lock));
   return u ? { utxo: u, unlocker: deps.feeWallet.template.unlockP2PKH() } : undefined;
 }
 

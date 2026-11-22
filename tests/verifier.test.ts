@@ -11,7 +11,7 @@ import { computeExpected } from '@/lib/templates/check';
 import type { ChallengeSpec } from '@/lib/templates/public';
 import { planVerdict, type VerifierChallenge } from '@/lib/verifier/decide';
 import { reproduceEvidence, type Evidence } from '@/lib/verifier/evidence';
-import { runVerifier, type VerifierDeps } from '@/lib/verifier/run';
+import { FEE_INPUT_MIN_SATS, pickFeeUtxo, runVerifier, type VerifierDeps } from '@/lib/verifier/run';
 import {
   START_HEIGHT, addUtxo, agent, baseOffer, challenger, feeWallet, fundedOffer, newProvider, stranger, verifier,
 } from './helpers';
@@ -240,4 +240,49 @@ describe('reproduce catches tampered evidence', () => {
     e.spec = canonicalize({ ...MATH, params: { op: 'add', left: '1', right: '1' } });
     expect(reproduceEvidence(e).problems.join(' ')).toMatch(/spec does not hash/);
   });
+});
+
+describe('fee wallet coin selection', () => {
+  const fw = { template: feeWallet.template, lock: feeWallet.lock };
+  const u = (satoshis: bigint, token = false) => ({ satoshis, ...(token ? { token: { category: 'aa' } } : {}) });
+
+  it('picks the smallest token-free coin that can pay the fee, skipping smaller ones', () => {
+    expect(FEE_INPUT_MIN_SATS).toBeGreaterThan(2_200n);
+    const small = u(2_000n);
+    const fit = u(FEE_INPUT_MIN_SATS);
+    const bigger = u(FEE_INPUT_MIN_SATS + 5_000n);
+    expect(pickFeeUtxo([bigger, small, fit])).toBe(fit);
+    expect(pickFeeUtxo([small, u(FEE_INPUT_MIN_SATS, true)])).toBeUndefined();
+  });
+
+  it('a 2,000-sat coin next to a usable one no longer blocks the settle: the winner keeps every escrow sat', async () => {
+    const { provider, c, commit, deps } = await setup();
+    const small = addUtxo(provider, feeWallet.lockHex, 2_000n);
+    addUtxo(provider, feeWallet.lockHex, 5_000n);
+    const out = await runVerifier(c, commit('-10'), { ...deps, feeWallet: fw });
+    expect(out.kind).toBe('settled');
+    expect((await provider.getUtxosForLockingBytecode(agent.lock)).find((x) => x.token)?.satoshis).toBe(5000n);
+    expect((await provider.getUtxosForLockingBytecode(feeWallet.lock)).some((x) => x.txid === small.txid)).toBe(true); // untouched
+  });
+
+  it('with only a too-small coin the escrow pays its own fee and still settles', async () => {
+    const { provider, c, commit, deps } = await setup();
+    const small = addUtxo(provider, feeWallet.lockHex, 2_200n);
+    const out = await runVerifier(c, commit('-11'), { ...deps, feeWallet: fw });
+    expect(out).toMatchObject({ kind: 'settled', verdict: 'FAIL' });
+    expect((await provider.getUtxosForLockingBytecode(feeWallet.lock)).some((x) => x.txid === small.txid)).toBe(true);
+  });
+
+  for (const path of ['PASS', 'FAIL', 'NORESPONSE', 'timeout'] as const) {
+    it(`a coin of exactly FEE_INPUT_MIN_SATS pays the fee on the ${path} path`, async () => {
+      const { provider, c, commit, deps } = await setup();
+      const coin = addUtxo(provider, feeWallet.lockHex, FEE_INPUT_MIN_SATS);
+      if (path === 'NORESPONSE') provider.setBlockHeight(DEADLINE);
+      if (path === 'timeout') provider.setBlockHeight(EXPIRY);
+      const answer = path === 'PASS' ? commit('-10') : path === 'FAIL' ? commit('-11') : null;
+      const out = await runVerifier(c, answer, { ...deps, feeWallet: fw });
+      expect(out.kind).toBe(path === 'timeout' ? 'timed_out' : 'settled');
+      expect((await provider.getUtxosForLockingBytecode(feeWallet.lock)).some((x) => x.txid === coin.txid)).toBe(false); // spent
+    });
+  }
 });
