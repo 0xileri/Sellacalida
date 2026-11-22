@@ -14,6 +14,10 @@ import { POST as adminOffer } from '@/app/api/admin/offers/route';
 import { POST as devChallenge } from '@/app/api/admin/dev/challenge/route';
 import { resetPublicDevLimit } from '@/lib/server/devLimit';
 import { loadConfig } from '@/lib/server/config';
+import { PREPARE_LIMIT, resetRateLimits, takeRateSlot } from '@/lib/server/rateLimit';
+import { buildAccept } from '@/lib/bch/transactions';
+import { escrowArgsFor, makeOfferContract } from '@/lib/contracts';
+import nextConfig from '@/next.config';
 
 const MATH = { templateId: 'math.exact_result', version: 1, network: 'mocknet', params: { op: 'add', left: '40', right: '2' } };
 const params = (id: string) => ({ params: Promise.resolve({ id }) });
@@ -30,7 +34,10 @@ function ctxWith(answer: string, env: Record<string, string> = {}): ServerContex
   return ctx;
 }
 
-afterEach(() => setServerContext(null));
+afterEach(() => {
+  setServerContext(null);
+  resetRateLimits();
+});
 
 describe('public routes', () => {
   it('/api/config exposes network and token info only', async () => {
@@ -158,5 +165,90 @@ describe('admin routes', () => {
     expect((await adminOffer(post({ bond: 'lots' }))).status).toBe(400);
     const o = await (await adminOffer(post({ bond: '250', fee: '30' }))).json();
     expect(o.params).toMatchObject({ bondAmount: '250', feeAmount: '30', maxDeadlineDelta: '144' });
+  });
+});
+
+describe('abuse limits and response headers', () => {
+  it('prepare is limited per client; a client-supplied earlier X-Forwarded-For hop does not get around it', async () => {
+    ctxWith('42');
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const from = (xff: string) => ({ 'x-forwarded-for': xff });
+    for (let i = 0; i < PREPARE_LIMIT.limit; i++) expect((await prepare(post({}, from('203.0.113.7')))).status).toBe(400);
+    const refused = await prepare(post({}, from('203.0.113.7')));
+    expect(refused.status).toBe(429);
+    expect((await refused.json()).error).toMatch(/too many requests from this address; try again in \d+ s/);
+    expect((await prepare(post({}, from('1.2.3.4, 203.0.113.7')))).status).toBe(429); // the proxy's hop is last
+    expect((await prepare(post({}, from('198.51.100.9')))).status).toBe(400); // other clients are unaffected
+    expect(warn).toHaveBeenCalledWith(expect.stringMatching(/prepare rate-limited \(x-forwarded-for hops: 2\)/));
+    warn.mockRestore();
+  });
+
+  it('the window slides', () => {
+    const o = { limit: 2, windowMs: 1000 };
+    expect(takeRateSlot('t', 'a', o, 0)).toBeNull();
+    expect(takeRateSlot('t', 'a', o, 10)).toBeNull();
+    expect(takeRateSlot('t', 'a', o, 20)).toMatch(/try again in 1 s/);
+    expect(takeRateSlot('t', 'b', o, 20)).toBeNull();
+    expect(takeRateSlot('t', 'a', o, 1001)).toBeNull();
+  });
+
+  it('every path gets the security headers, and no x-powered-by', async () => {
+    expect(nextConfig.poweredByHeader).toBe(false);
+    const rules = await nextConfig.headers!();
+    expect(rules).toHaveLength(1);
+    expect(rules[0].source).toBe('/:path*');
+    expect(Object.fromEntries(rules[0].headers.map((h) => [h.key, h.value]))).toMatchObject({
+      'X-Frame-Options': 'DENY',
+      'Content-Security-Policy': "frame-ancestors 'none'",
+      'X-Content-Type-Options': 'nosniff',
+      'Strict-Transport-Security': expect.stringMatching(/^max-age=\d+/),
+    });
+  });
+});
+
+describe('late accepts', () => {
+  it('an accept broadcast after the server marked its prepare abandoned is still recorded, so the escrow settles', async () => {
+    const ctx = ctxWith('42');
+    const offer = await (await adminOffer(post({}))).json();
+    const ch = ctx.devChallenger!;
+    const prep = await (await prepare(post({ offerId: offer.id, spec: MATH, challengerAddress: ch.address }))).json();
+    ctx.db.updateChallenge(prep.challenge.id, { status: 'abandoned' }); // what the hourly sweep does
+
+    const o = ctx.db.offer(offer.id)!;
+    const c = ctx.db.challenge(prep.challenge.id)!;
+    const contract = makeOfferContract(o.params, ctx.provider);
+    const utxos = await ctx.provider.getUtxosForLockingBytecode(ch.lock);
+    const tokenUtxo = utxos.find((u) => u.token?.category === o.params.tokenCategory && u.token.amount >= o.params.feeAmount)!;
+    const bch = utxos.filter((u) => !u.token).sort((a, b) => (b.satoshis > a.satoshis ? 1 : -1))[0];
+    const { txid } = await buildAccept({
+      provider: ctx.provider, offer: o.params, offerContract: contract,
+      offerUtxo: {
+        txid: o.txid, vout: o.vout, satoshis: o.satoshis, lockingBytecode: contract.lockingBytecode,
+        token: { category: o.params.tokenCategory, amount: o.params.bondAmount },
+      },
+      terms: c.terms, escrowArgs: escrowArgsFor(o.params, c.terms),
+      challengerTokenInput: { utxo: tokenUtxo, unlocker: ch.template.unlockP2PKH() },
+      bchFeeInput: { utxo: bch, unlocker: ch.template.unlockP2PKH() },
+      escrowSatoshis: c.escrowSatoshis, locktime: c.locktime,
+    }).send();
+
+    const res = await accepted(post({ txid }), params(c.id));
+    expect(res.status).toBe(200);
+    expect(ctx.db.challenge(c.id)).toMatchObject({ acceptTxid: txid, lastError: null });
+    expect(ctx.db.challenge(c.id)?.status).not.toBe('abandoned');
+    expect(ctx.db.offer(offer.id)?.status).toBe('accepted');
+  });
+
+  it('but an abandoned prepare cannot claim the accept of the challenger who went first', async () => {
+    const ctx = ctxWith('42');
+    const offer = await (await adminOffer(post({}))).json();
+    const loser = await (await prepare(post({ offerId: offer.id, spec: MATH, challengerAddress: ctx.devChallenger!.address }))).json();
+    const winner = await (await devChallenge(post({ offerId: offer.id, spec: MATH }))).json();
+    expect(ctx.db.challenge(loser.challenge.id)?.status).toBe('abandoned');
+
+    const res = await accepted(post({ txid: winner.acceptTxid }), params(loser.challenge.id));
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toMatch(/not the escrow for this challenge/);
+    expect(ctx.db.challenge(loser.challenge.id)).toMatchObject({ status: 'abandoned', acceptTxid: null });
   });
 });

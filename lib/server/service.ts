@@ -269,7 +269,10 @@ export async function prepareChallenge(
 export async function confirmAccept(ctx: ServerContext, challengeId: string, txid: string): Promise<ChallengeRecord> {
   const c = ctx.db.challenge(challengeId);
   if (!c) throw new UserError('no such challenge', 404);
-  if (c.status !== 'awaiting_accept') {
+  // an abandoned prepare (an hour without an accept, or another challenger went first) may still be
+  // broadcast late; the on-chain checks below decide. Refusing it here would leave a real escrow
+  // that the verifier never settles or times out.
+  if (c.status !== 'awaiting_accept' && c.status !== 'abandoned') {
     if (c.acceptTxid === txid) return c; // idempotent
     throw new UserError(`challenge is ${c.status}`, 409);
   }
@@ -300,7 +303,7 @@ export async function confirmAccept(ctx: ServerContext, challengeId: string, txi
     throw new UserError('output 0 is not the escrow for this challenge');
   }
   const updated = ctx.db.updateChallenge(c.id, {
-    status: 'accepted', acceptTxid: txid, escrow: { txid, vout: 0, satoshis: out0.valueSatoshis },
+    status: 'accepted', acceptTxid: txid, escrow: { txid, vout: 0, satoshis: out0.valueSatoshis }, lastError: null,
   });
   ctx.db.updateOffer(o.id, { status: 'accepted', challengeId: c.id, closeTxid: txid });
   for (const other of ctx.db.challenges.filter((x) => x.offerId === o.id && x.id !== c.id && x.status === 'awaiting_accept')) {
